@@ -1,4 +1,5 @@
- nbyte serialBuffer[64];
+byte serialBuffer[64];
+
 int bufferIndex = 0;
 
 void sendFrame(const byte* frame, size_t len, const char* debugMsg) 
@@ -44,45 +45,83 @@ void processSerialInput()
 {
   while (Serial.available() > 0) 
   {
+
     byte b = Serial.read();
+
     if (bufferIndex < 64) serialBuffer[bufferIndex++] = b;    //SerialBuffer need to be translate
-              
-    if (b == '}') 
+    
+    if (bufferIndex >= 2)
     {
-      if (isResetCommand(serialBuffer, bufferIndex)) 
-      {
-        handleReceivedHexData();
-        bufferIndex = 0;
-        return;
-      }
-
-      bool hasChanged = false;
-      if (bufferIndex != lastLen || memcmp(serialBuffer, lastFrame, bufferIndex) != 0) 
-      {
-        hasChanged = true;
-      }
-
-      bool forceSend = (millis() - lastHeartbeat > 30000);
-
-      if (hasChanged || forceSend) 
-      {
-        if (mqttClient.connected()) 
+        if (serialBuffer[0] != 0x55 ||
+            serialBuffer[1] != 0xAA)
         {
-          mqttClient.publish(mqtt_pub_topic, serialBuffer, bufferIndex);
-          
-          memcpy(lastFrame, serialBuffer, bufferIndex);
-          lastLen = bufferIndex;
-          lastHeartbeat = millis();
-
-          #ifdef DEBUG
-            Serial.println("\n[BRIDGE] New/Heartbeat Data sent to MQTT.");
-          #endif
+            bufferIndex = 0;
+            continue;
         }
-      }
-      bufferIndex = 0;
     }
+
+    if (bufferIndex >= 6) 
+    {
+      uint16_t dataLen =
+                ((uint16_t)serialBuffer[4] << 8) |
+                 serialBuffer[5];
+
+      uint16_t expectedLen = 6 + dataLen + 1;   // Header + Data + Checksum
+      
+
+      if (bufferIndex == expectedLen)
+      {
+        byte cmd = serialBuffer[3];
+        byte oemLen = 0 ;
+        byte *oemFrame =
+            TuyaToOem(
+                cmd,
+                &serialBuffer[6],   // DP payload
+                dataLen,
+                &oemLen
+            );
+        
+        if (isResetCommand(serialBuffer, bufferIndex)) 
+        {
+          handleReceivedHexData();
+          bufferIndex = 0;
+          return;
+        }
+        bool hasChanged = false;
+        if (bufferIndex != lastLen || memcmp(serialBuffer, lastFrame, bufferIndex) != 0) 
+        {
+          hasChanged = true;
+        }
+
+        bool forceSend = (millis() - lastHeartbeat > 30000);
+
+        if (hasChanged || forceSend)
+        {
+          if (mqttClient.connected())
+          {
+              mqttClient.publish(
+                  mqtt_pub_topic,
+                  oemFrame,
+                  oemLen
+              );
+
+              memcpy(lastFrame, serialBuffer, bufferIndex);
+              lastLen = bufferIndex;
+              lastHeartbeat = millis();
+
+              #ifdef DEBUG
+                Serial.println("\n[BRIDGE] New/Heartbeat Data sent to MQTT.");
+              #endif
+          }
+        }
+        bufferIndex = 0;
+      }
+    }
+    
+    bufferIndex = 0;
   }
 }
+
 
 int captureSerialResponse(uint8_t* buf, size_t maxLen) 
 {

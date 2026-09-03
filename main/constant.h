@@ -16,6 +16,20 @@ const char* mqtt_password = "pass123";
 extern char mqtt_pub_topic[18]; 
 extern char mqtt_sub_topic[18];
 
+enum CMD_Tuya
+{
+    CMD_HEARTBEAT,         // 0
+    CMD_GET_PRODUCT_INFO,            // 1
+    CMD_GET_MODULE_WORK_MODE,      // 2
+    REPORT_WIFI_MODULE_STATUS,         // 3
+    CMD_RESET_WIFI,          // 4
+    CMD_SEL_NETWORK_CONFIGURATION, // 5
+    CMD_SET_DP_VALUE, // 6
+    CMD_REPORT_DP_VALUE, // 7
+    CMD_GET_ALL_DP_VALUE, // 8
+
+}CMD_ID_e;
+
 enum DeviceState 
 {
   ST_INIT,
