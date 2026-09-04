@@ -67,55 +67,58 @@ void runStateMachine()
 
     case ST_OPERATIONAL:
       static bool ledReset = false;
-      if(!ledReset) { blinkoff(); ledReset = true; }
-      digitalWrite(STATUS_LED, HIGH);
-      processMqtt();
+      //if(!ledReset) { blinkoff(); ledReset = true; }
+      //digitalWrite(STATUS_LED, HIGH);
+      //processMqtt();
+    
       processSerialInput();
-
+      //digitalWrite(STATUS_LED, LOW);
       static unsigned long lastSerialSend = 0;
+
       if (!msgQueue.empty() && (millis() - lastSerialSend > 100))
       {
+        //Serial.print("Pop the queue ");
         String nextMsg = msgQueue.front();
+        OemToTuya(&nextMsg);
         Serial.print(nextMsg);
         msgQueue.pop();
         lastSerialSend = millis();
       }
 
-      if (/* specific MQTT command received */ false)
-      {
+      if (/* specific MQTT command received */ false){
         currentState = ST_OTA_CHECK;
       }
 
-      if (!mqttClient.connected()) 
-      {
-        ledReset = false;
-        blink400ms();
-        currentState = ST_MQTT_CONNECT;
-      }
+      // if (!mqttClient.connected()) 
+      // {
+      //   ledReset = false;
+      //   blink400ms();
+      //   currentState = ST_MQTT_CONNECT;
+      // }
     break;
 
-    case ST_OTA_CHECK:
-      if (checkForUpdates()) 
-      {
-        currentState = ST_OTA_PERFORM;
-      }
-      else
-      {
-        currentState = ST_OPERATIONAL;
-      }
-    break;
+    // case ST_OTA_CHECK:
+    //   if (checkForUpdates()) 
+    //   {
+    //     currentState = ST_OTA_PERFORM;
+    //   }
+    //   else
+    //   {
+    //     currentState = ST_OPERATIONAL;
+    //   }
+    // break;
 
-    case ST_OTA_PERFORM:
-      performUpdate();
-      currentState = ST_OPERATIONAL;
-    break;
+    // case ST_OTA_PERFORM:
+    //   performUpdate();
+    //   currentState = ST_OPERATIONAL;
+    // break;
 
-    case ST_IDLE: // This is our "Retry Wait" state
-      if (millis() - stateTimer >= MQTT_RETRY_MS) currentState = ST_MQTT_CONNECT;
-      processSerialInput();
-    break;    
+    // case ST_IDLE: // This is our "Retry Wait" state
+    //   if (millis() - stateTimer >= MQTT_RETRY_MS) currentState = ST_MQTT_CONNECT;
+    //   processSerialInput();
+    // break;    
 
-    case ST_ERROR:
-    break;
+    // case ST_ERROR:
+    // break;
   }
 }

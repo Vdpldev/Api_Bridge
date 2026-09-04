@@ -16,19 +16,79 @@ const char* mqtt_password = "pass123";
 extern char mqtt_pub_topic[18]; 
 extern char mqtt_sub_topic[18];
 
-enum CMD_Tuya
-{
-    CMD_HEARTBEAT,         // 0
-    CMD_GET_PRODUCT_INFO,            // 1
-    CMD_GET_MODULE_WORK_MODE,      // 2
-    REPORT_WIFI_MODULE_STATUS,         // 3
-    CMD_RESET_WIFI,          // 4
-    CMD_SEL_NETWORK_CONFIGURATION, // 5
-    CMD_SET_DP_VALUE, // 6
-    CMD_REPORT_DP_VALUE, // 7
-    CMD_GET_ALL_DP_VALUE, // 8
 
-}CMD_ID_e;
+// Define the structure to hold current device states
+#define STORAGE_SIGNATURE 0xDEADBEEF
+#define EEPROM_SIZE 512
+
+struct TuyaDeviceState {
+   uint32_t signature; // Should always be 0xDEADBEEF if data is valid
+    // 1-4 Gang Switches
+    bool switch_1;
+    bool switch_2;
+    bool switch_3;
+    bool switch_4;
+
+    // Fan Specifics
+    bool fan_power;
+    uint8_t fan_speed; // Usually 1-3 or 1-6
+    uint8_t fan_mode;  // Nature, Sleep, etc.
+
+    // System Metadata
+    unsigned long last_updated; // Timestamp (millis)
+    bool is_online;
+};
+
+// Create a global instance of the status
+TuyaDeviceState currentStatus = {0xDEADBEEF,false, false, false, false, false, 0, 0, 0, false};
+
+// Protocol fixed bytes
+enum TuyaProtocol {
+    TUYA_HEADER_HIGH = 0x55,
+    TUYA_HEADER_LOW  = 0xAA,
+    TUYA_VERSION_03  = 0x03
+};
+
+// Official Tuya Command IDs (The 4th byte in the frame)
+enum TuyaCommand {
+    TUYA_CMD_HEARTBEAT     = 0x00,
+    TUYA_CMD_PRODUCT_INFO  = 0x01,
+    TUYA_CMD_WORKING_MODE  = 0x02,
+    TUYA_CMD_REPORT_STATUS = 0x07, // MCU reports state to Module
+    TUYA_CMD_SEND_COMMAND  = 0x06, // Module sends command to MCU
+    TUYA_CMD_QUERY_STATUS  = 0x08  // Module queries MCU
+};
+
+// Data Point IDs (DPIDs) - Specific to your device
+enum TuyaDPID {
+    DPID_SWITCH_1  = 0x01,
+    DPID_FAN_SWITCH = 0x66, // 102: Fan On/Off
+    DPID_FAN_SPEED  = 0x68  // 104: Fan Speed (1-3 or 1-6)
+};
+// Frame Markers
+enum OemProtocol {
+    OEM_START_BYTE = 0x7B, // '{' - Start of Frame
+    OEM_END_BYTE   = 0x7D  // '}' - End of Frame
+};
+
+// Command types for your specific system
+enum OemCommand {
+    OEM_CMD_UPDATE        = 0x00,
+    OEM_CMD_CONTROL       = 0xA2,
+    OEM_CMD_ACK           = 0x06,
+    OEM_CMD_ERROR         = 0x15
+};
+enum OemSTATUS {
+    OEM_SWITCH_ON = 0x00,
+    OEM_SWITCH_OFF= 0xFF
+};
+// Error Codes (Optional but helpful)
+enum OemError {
+    ERR_CHECKSUM = 0x01,
+    ERR_INVALID_CMD = 0x02,
+    //ERR_TIMEOUT = 0x03
+};
+
 
 enum DeviceState 
 {
@@ -44,7 +104,7 @@ enum DeviceState
   ST_AP_MODE,
   ST_ERROR
 };
-DeviceState currentState = ST_INIT;
+DeviceState currentState = ST_OPERATIONAL;
 
 struct Config 
 {

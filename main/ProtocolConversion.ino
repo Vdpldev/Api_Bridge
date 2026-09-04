@@ -1,5 +1,6 @@
-byte OEMBuffer[64];
 
+
+byte OEMBuffer[64];
 byte calcChecksum(byte *buf, int len)
 {
     byte chk = 0;
@@ -12,8 +13,9 @@ byte calcChecksum(byte *buf, int len)
     return chk;
 }
 
-byte* TuyaToOem(byte cmd , byte *tuyaData, int tuyaLen, byte oemLen)
-{
+byte* TuyaToOem(byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
+    
+    //const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D}; Serial.write(f, 7);
     byte dpid;
     byte type;
 
@@ -27,60 +29,59 @@ byte* TuyaToOem(byte cmd , byte *tuyaData, int tuyaLen, byte oemLen)
         ((uint16_t)tuyaData[idx] << 8) |
          tuyaData[idx + 1];
 
+    OEMBuffer[out++] = OEM_START_BYTE;      // Start
     idx += 2;
-    if(cmd == CMD_SET_DP_VALUE )
-    {
-        OEMBuffer[out++] = 0x7B;      // Start
-        OEMBuffer[out++] = 0x00 ;      // Command
-        OEMBuffer[out++] = 0x04;      // Length
+    if(cmd == TUYA_CMD_REPORT_STATUS ){
+        // const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D}; Serial.write(f, 7);
+        OEMBuffer[out++] = OEM_CMD_UPDATE;      // Command
+        OEMBuffer[out++] = 0x04 ;      // Length
 
-        /* Node Number */
-        OEMBuffer[out++] = dpid;
-
-        /* Default values */
-        OEMBuffer[out++] = 0xFF;
-        OEMBuffer[out++] = 0x00;
-
-        switch(type)
-        {
+        switch(type){
             case 0x01:      // BOOL
             {
+                 /* Node Number */
+                if(dpid == DPID_FAN_SWITCH) OEMBuffer[out++] = 0x01 ;
+                else OEMBuffer[out++] = dpid+1;
                 byte value = tuyaData[idx];
 
                 if(value)
-                    OEMBuffer[out++] = 0x00;   // ON
+                    OEMBuffer[out++] = OEM_SWITCH_ON;   // ON
                 else
-                    OEMBuffer[out++] = 0xFF;   // OFF
+                    OEMBuffer[out++] = OEM_SWITCH_OFF;   // OFF
 
-                OEMBuffer[5] = 0x00;
+                OEMBuffer[out++] = 0x00;
+
                 break;
             }
 
             case 0x02:      // VALUE
             {
-                uint32_t value =
-                    ((uint32_t)tuyaData[idx] << 24) |
-                    ((uint32_t)tuyaData[idx+1] << 16) |
-                    ((uint32_t)tuyaData[idx+2] << 8) |
-                    ((uint32_t)tuyaData[idx+3]);
+                dpid = 0x01 ;
+                int value =(int)tuyaData[idx+3];
 
                 if(value > 100)
                     value = 100;
-
-                OEMBuffer[4] = 0x00;           // ON
-                OEMBuffer[5] = (byte)value;    // Dimmer
+                OEMBuffer[out++] = dpid;
+                OEMBuffer[out++] = OEM_SWITCH_ON;           // ON
+                OEMBuffer[out++] = (byte)(value * 25 );    // Dimmer
                 break;
             }
         }
 
-        OEMBuffer[6] = calcChecksum(OEMBuffer, 6);
+        OEMBuffer[out++] = calcChecksum(OEMBuffer, 6);
 
-        OEMBuffer[7] = 0x7D;
-        oemLen = 8 ;
-
+        OEMBuffer[out++] = OEM_END_BYTE;
+        *oemLen = out ;
+        
         return OEMBuffer;
     }
     else
         return OEMBuffer;
+
+    ;
 }
 
+void OemToTuya(String *OemData)
+{
+
+}
