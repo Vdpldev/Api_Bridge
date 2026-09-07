@@ -6,6 +6,7 @@ void runStateMachine()
   switch (currentState) 
   {
     case ST_INIT:
+      currentHeartBeatStatus = 0x00;
       #ifdef DEBUG
         Serial.println("[STATE] Initializing Hardware...");
       #endif
@@ -19,11 +20,13 @@ void runStateMachine()
     break;
 
     case ST_LOAD_CONFIG:
+      currentHeartBeatStatus = 0x00;
       if (loadCredentials()) currentState = ST_WIFI_CONNECT;
       else currentState = ST_AP_MODE;
     break;
 
     case ST_AP_MODE:
+      currentHeartBeatStatus = 0x01;
       if (!apStarted) 
       {
         startAPMode();
@@ -34,6 +37,7 @@ void runStateMachine()
     break;
 
     case ST_WIFI_CONNECT:
+      currentHeartBeatStatus = 0x02;
       blink400ms();
       startWifiStation(deviceSettings.ssid, deviceSettings.password);
       stateTimer = millis();
@@ -56,10 +60,12 @@ void runStateMachine()
     case ST_MQTT_CONNECT:
       if (attemptMqttConnect())
       {
+        currentHeartBeatStatus = 0x04;
         currentState = ST_OPERATIONAL;
       } 
       else 
       {
+        currentHeartBeatStatus = 0x03;
         stateTimer = millis();
         currentState = ST_IDLE;
       }
@@ -75,8 +81,7 @@ void runStateMachine()
       //digitalWrite(STATUS_LED, LOW);
       static unsigned long lastSerialSend = 0;
 
-      if (!msgQueue.empty() && (millis() - lastSerialSend > 100))
-      {
+      if (!msgQueue.empty() && (millis() - lastSerialRead > 3000) && (millis() - lastSerialSend > 1000)){
         //Serial.print("Pop the queue ");
         String nextMsg = msgQueue.front();
         OemToTuya(&nextMsg);

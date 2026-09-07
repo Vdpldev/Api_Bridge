@@ -5,14 +5,13 @@ static String jsonPayload = "";
 static bool receiving = false;
 static unsigned long connectionStartTime = 0;
 
-String shiftFourDigits(String mac) 
-{
+String shiftFourDigits(String mac){
+
     return mac.substring(4) + mac.substring(0, 4);
 }
 
+void generateMqttTopics(){
 
-void generateMqttTopics() 
-{
   memset(mqtt_pub_topic, 0, sizeof(mqtt_pub_topic));
   memset(mqtt_sub_topic, 0, sizeof(mqtt_sub_topic));
 
@@ -21,8 +20,8 @@ void generateMqttTopics()
   mac.replace(":", "");
   mac.toLowerCase();
 
-  if (mac.length() < 12) 
-  {
+  if (mac.length() < 12){
+
     #ifdef DEBUG    
       Serial.println("[ERROR] MAC not ready. Retrying...");
     #endif
@@ -30,8 +29,8 @@ void generateMqttTopics()
     mac.replace(":", "");
   }
 
-  if (mac.length() >= 12) 
-  {
+  if (mac.length() >= 12){
+
     String scrambledMac = shiftFourDigits(mac) ;
     String pub = scrambledMac + "s" ;
 
@@ -41,8 +40,8 @@ void generateMqttTopics()
     sub.toCharArray(mqtt_sub_topic, sizeof(mqtt_sub_topic));
 
   } 
-  else 
-  {
+  else{
+
     strcpy(mqtt_pub_topic, "unknown_device_p");
     strcpy(mqtt_sub_topic, "unknown_device_s");
   }
@@ -52,8 +51,8 @@ void generateMqttTopics()
   #endif    
 }
 
-void startWifiStation(const char* ssid, const char* pass) 
-{
+void startWifiStation(const char* ssid, const char* pass){
+
   #ifdef DEBUG  
     Serial.println("[NETWORK] Connecting to WiFi...");
   #endif  
@@ -61,13 +60,12 @@ void startWifiStation(const char* ssid, const char* pass)
   WiFi.begin(ssid, pass);
 }
 
-int getWifiStatus() 
-{
+int getWifiStatus(){
   return WiFi.status(); 
 }
 
-void startAPMode() 
-{
+void startAPMode(){
+
   #ifdef DEBUG  
     Serial.println("[NETWORK] Starting Access Point Mode...");
   #endif  
@@ -86,11 +84,12 @@ void startAPMode()
   server.begin(); 
   #ifdef DEBUG  
     Serial.println("[TCP] Server Started...");
-  #endif      
+  #endif
+
 }
 
-void handleTcpConfig() 
-{
+void handleTcpConfig(){
+
   WiFiClient client = server.available();
   if (!client) return; 
 
@@ -101,10 +100,10 @@ void handleTcpConfig()
   String incomingData = "";
   unsigned long timeout = millis();
 
-  while (client.connected() && millis() - timeout < 3000) 
-  {
-    while (client.available()) 
-    {
+  while (client.connected() && millis() - timeout < 3000){
+
+    while (client.available()){
+
       char c = client.read();
       incomingData += c;
       timeout = millis(); 
@@ -115,8 +114,8 @@ void handleTcpConfig()
   }
 
   parseData:
-  if (incomingData.length() > 0) 
-  {
+  if (incomingData.length() > 0){
+
     #ifdef DEBUG
       Serial.print("[TCP] Data Received: ");
       Serial.println(incomingData);
@@ -125,13 +124,12 @@ void handleTcpConfig()
     StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, incomingData);
     
-    if (!error) 
-    {
+    if (!error){
+
       String newSSID = doc["ssid"];
       String newPass = doc["password"];
 
-      if (newSSID.length() > 0) 
-      {
+      if (newSSID.length() > 0) {
         #ifdef DEBUG
           Serial.println("[TCP] Credentials Valid. Saving...");
         #endif
@@ -164,27 +162,27 @@ void handleTcpConfig()
   }
 }
 
-void sendCombinedResponse(WiFiClient& client, uint8_t* frame, int frameLen, char* topic) 
-{
+void sendCombinedResponse(WiFiClient& client, uint8_t* frame, int frameLen, char* topic){
+
   uint8_t masterBuffer[TCP_BUFFER_SIZE]; 
   memset(masterBuffer, 0, TCP_BUFFER_SIZE);
   int totalLength = 0;
 
-  if (frameLen > 0 && frameLen < (TCP_BUFFER_SIZE - 32)) 
-  {
+  if (frameLen > 0 && frameLen < (TCP_BUFFER_SIZE - 32)) {
+
     memcpy(masterBuffer, frame, frameLen);
     totalLength = frameLen;
   }
 
   int topicLen = strlen(topic);
-  if (totalLength + topicLen < TCP_BUFFER_SIZE) 
-  {
+  if (totalLength + topicLen < TCP_BUFFER_SIZE) {
+
     memcpy(masterBuffer + totalLength, topic, topicLen);
     totalLength += topicLen;
   }
 
-  if (totalLength > 0) 
-  {
+  if (totalLength > 0){
+
     client.write(masterBuffer, totalLength);
     client.flush();
     #ifdef DEBUG

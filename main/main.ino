@@ -1,50 +1,107 @@
 #include "constant.h"
-#include <EEPROM.h>
 
-// 1. Define a safe size (ESP8266 uses one 4KB sector, so 512 is safe)
-#define EEPROM_SIZE 512 
 // #define DEBUG
+void pushToMsgQueue(const byte* frame, size_t len) {
+    String msgStr = "";
+    msgStr.reserve(len); 
+    for (size_t i = 0; i < len; i++) {
+        msgStr += (char)frame[i];
+    }
+    msgQueue.push(msgStr);
+}
+void setup(){
 
-void setup() 
-{
   Serial.begin(DEBUG_BAUD);
-  EEPROM.begin(EEPROM_SIZE);
+  
   #ifdef DEBUG
     Serial.println("--- SYSTEM BOOTING ---");
   #endif
 
-  bool isStateValid = loadStatusFromEEPROM();
+  // 1. Frame: Heartbeat (Standard Tuya Check-in)
+  // 55 AA 00 00 00 00 FF
+  const byte heartbeatFrame[] = {0x55, 0xAA, 0x00, 0x00, 0x00, 0x00, 0xFF};
+  
+  // 2. Frame: Query All Status (Forces MCU to report all DPIDs)
+  // 55 AA 00 08 00 00 07
+  const byte queryStatusFrame[] = {0x7B, 0x02, 0x01, 0x01, 0x7D};
+  pushToMsgQueue(queryStatusFrame, sizeof(queryStatusFrame));
+  // Push Heartbeat first
+  //pushToMsgQueue(heartbeatFrame, sizeof(heartbeatFrame));
+  
+  //3. Switch 1 On 
+      //7B 00 04 02 00 00 06 7D
+  const byte S1_ON[] = {0x7B, 0x00, 0x04, 0x02, 0x00, 0x00, 0x06 ,0x7D };
+  pushToMsgQueue(S1_ON, sizeof(S1_ON));
 
+  const byte S1_OFF[] = {0x7B, 0x00, 0x04, 0x02, 0xFF, 0x00, 0x05 ,0x7D };
+  pushToMsgQueue(S1_OFF, sizeof(S1_OFF));
 
+  const byte S2_ON[] = {0x7B, 0x00, 0x04, 0x03, 0x00, 0x00, 0x07 ,0x7D };
+  pushToMsgQueue(S2_ON, sizeof(S2_ON));
 
-   if (isStateValid == false) 
-  {
-      const byte f[] = {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00 ,0x07};
-      size_t length = sizeof(f);
+  const byte S2_OFF[] = {0x7B, 0x00, 0x04, 0x03, 0xFF, 0x00, 0x06 ,0x7D };
+  pushToMsgQueue(S2_OFF, sizeof(S2_OFF));
 
-      String msgStr = "";
-      msgStr.reserve(length); 
+  const byte F_ON[] = {0x7B, 0x00, 0x04, 0x01, 0x00, 0x00, 0x05 ,0x7D };
+  pushToMsgQueue(F_ON, sizeof(F_ON));
 
-      for (size_t i = 0; i < length; i++) {
-        msgStr += (char)f[i];
-      }
+  const byte F_ON_25[] = {0x7B, 0x00, 0x04, 0x01, 0x00, 0x19, 0x1E ,0x7D };
+  pushToMsgQueue(F_ON_25, sizeof(F_ON_25));
 
-      msgQueue.push(msgStr);
-      
-      #ifdef DEBUG
-        Serial.println(F("[SYSTEM] First boot/Empty EEPROM: Status Query Queued."));
-      #endif
-  } 
-  else 
-  {
-      #ifdef DEBUG
-        Serial.println(F("[SYSTEM] Restored from EEPROM: Skipping Status Query."));
-      #endif
-  }
+  const byte F_ON_50[] = {0x7B, 0x00, 0x04, 0x01, 0x00, 0x32, 0x37 ,0x7D };
+  pushToMsgQueue(F_ON_50, sizeof(F_ON_50));
+
+  const byte F_OFF[] = {0x7B, 0x00, 0x04, 0x01, 0xFF, 0x00, 0x04 ,0x7D };
+  pushToMsgQueue(F_OFF, sizeof(F_OFF));
+
+  const byte ALL_ON[] = {0x7B, 0x01, 0x0B, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  0x6F, 0x7D};
+  pushToMsgQueue(ALL_ON, sizeof(ALL_ON));
+
+  
 
 }
 
-void loop() 
-{
-  runStateMachine(); // Single State Machine for everything.
+// Function to send Heartbeat (Command 0x00)
+void maintainHeartbeat() {
+  if (millis() - lastHeartbeatTime >= 5000) {
+    const byte f[] = {0x55, 0xAA, 0x00, TUYA_CMD_HEARTBEAT, 0x00, 0x00, 0xFF};
+    pushToMsgQueue(f, 7);
+    lastHeartbeatTime = millis();
+    
+    #ifdef DEBUG
+      Serial.println(F("[TUYA] Heartbeat Sent"));
+    #endif
+  }
+}
+
+// Function to report WiFi Status to MCU (Command 0x03)
+void reportWifiStatus() {
+  
+  if (currentHeartBeatStatus != lastWifiStateReported) {
+    lastWifiStateReported = currentHeartBeatStatus;
+    
+    byte f[8] = {0x55, 0xAA, 0x00, 0x03, 0x00, 0x01, currentHeartBeatStatus, 0x00};
+    
+    // Calculate Checksum
+    byte cs = 0;
+    for(int i=0; i<7; i++) cs += f[i];
+    f[7] = cs;
+
+    pushToMsgQueue(f, 8);
+
+    #ifdef DEBUG
+      Serial.print(F("[TUYA] WiFi Status Updated: "));
+      Serial.println(currentStatus);
+    #endif
+  }
+}
+
+// The updated Loop
+void loop() {
+  runStateMachine();      // Your existing State Machine logic
+  
+  maintainHeartbeat();    // Handles 5s timer for Heartbeat
+  
+  reportWifiStatus();     // Reports WiFi/MQTT status changes
+  
 }

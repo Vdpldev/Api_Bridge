@@ -4,13 +4,11 @@
 
 WiFiClientSecure httpsClient;
 
-void initOta() 
-{
-  httpsClient.setInsecure();
+void initOta() { 
+  httpsClient.setInsecure(); 
 }
 
-bool checkForUpdates() 
-{
+bool checkForUpdates() {
   #ifdef DEBUG  
     Serial.println("[OTA] Checking server for new version...");
   #endif
@@ -18,8 +16,8 @@ bool checkForUpdates()
   return true; 
 }
 
-void performUpdate() 
-{
+void performUpdate() {
+
   #ifdef DEBUG  
     Serial.println("[OTA] Starting Download...");
   #endif
