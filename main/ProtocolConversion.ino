@@ -225,24 +225,24 @@ void OemToTuya(String *OemData)
             OEMBuffer[out++] = 11;            
 
             // --- NODE 1: FAN ---
-            OEMBuffer[out++] = currentStatus.fan_power ? 0xFF : 0x00;
+            OEMBuffer[out++] = currentStatus.fan_power ? 0x00 : 0xFF;
             // Convert fan speed (assuming 1-5) to 0-100 range
-            OEMBuffer[out++] = (byte)(currentStatus.fan_speed * 20); 
+            OEMBuffer[out++] = (byte)(currentStatus.fan_speed * 25); 
 
             // --- NODE 2: SWITCH 1 ---
-            OEMBuffer[out++] = currentStatus.switch_1 ? 0xFF : 0x00;
+            OEMBuffer[out++] = currentStatus.switch_1 ? 0x00 : 0xFF;
             OEMBuffer[out++] = 0x00; // No Dimming for simple switch
 
             // --- NODE 3: SWITCH 2 ---
-            OEMBuffer[out++] = currentStatus.switch_2 ? 0xFF : 0x00;
+            OEMBuffer[out++] = currentStatus.switch_2 ? 0x00 : 0xFF;
             OEMBuffer[out++] = 0x00;
 
             // --- NODE 4: SWITCH 3 ---
-            OEMBuffer[out++] = currentStatus.switch_3 ? 0xFF : 0x00;
+            OEMBuffer[out++] = currentStatus.switch_3 ? 0x00 : 0xFF;
             OEMBuffer[out++] = 0x00;
 
             // --- NODE 5: SWITCH 4 ---
-            OEMBuffer[out++] = currentStatus.switch_4 ? 0xFF : 0x00;
+            OEMBuffer[out++] = currentStatus.switch_4 ? 0x00 : 0xFF;
             OEMBuffer[out++] = 0x00;
 
             // 3. Calculate Checksum (Sum of all bytes before CS)
