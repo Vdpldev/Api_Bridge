@@ -128,18 +128,31 @@ void processSerialInput() {
        // 5. Once the full frame has arrived
       if (bufferIndex == expectedLen) {
         
+        byte calculatedTuyaCs = 0;
+        for (int i = 0; i < expectedLen - 1; i++) {
+            calculatedTuyaCs += serialBuffer[i];
+        }
+
+        if (calculatedTuyaCs != serialBuffer[expectedLen - 1]) {
+          #ifdef DEBUG
+              Serial.println(F("[ERROR] Tuya Checksum Mismatch! Discarding."));
+          #endif
+          break;
+        }
+
         if (isResetCommand(serialBuffer, bufferIndex)) {
           handleReceivedHexData();
         }
-        
+        byte ver = serialBuffer[2];
         byte cmd = serialBuffer[3];
         
         // Handle Logic
         int oemLen = 0;
-        byte *oemFrame = TuyaToOem(cmd, &serialBuffer[6], dataLen, &oemLen);
+        byte *oemFrame = TuyaToOem(ver ,cmd, &serialBuffer[6], dataLen, &oemLen);
         
         
         if (oemFrame != nullptr && oemLen > 0) {
+          if(oemFrame[1] == 0x56)sendFrame(oemFrame, oemLen, "Converted OEM");
           #ifdef DEBUG
             sendFrame(oemFrame, oemLen, "Converted OEM");
           #endif

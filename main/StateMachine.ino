@@ -81,7 +81,7 @@ void runStateMachine()
       //digitalWrite(STATUS_LED, LOW);
       static unsigned long lastSerialSend = 0;
 
-      if (!msgQueue.empty() && (millis() - lastSerialRead > 3000) && (millis() - lastSerialSend > 1000)){
+      if (!msgQueue.empty() && (millis() - lastSerialRead > 1000) && (millis() - lastSerialSend > 1000)){
         //Serial.print("Pop the queue ");
         String nextMsg = msgQueue.front();
         OemToTuya(&nextMsg);

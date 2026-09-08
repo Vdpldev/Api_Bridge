@@ -79,8 +79,9 @@ enum OemCommand {
     OEM_NODE_STATUS           = 0x02,
     OEM_ALL_NODE              = 0x01,
     OEM_CMD_CONTROL           = 0xA2,
-    OEM_CMD_ACK               = 0x06,
-    OEM_CMD_ERROR             = 0x15
+    OEM_CMD_DEVICE_INFO       = 0x06,
+    OEM_CMD_ERROR             = 0x15,
+    OEM_CMD_ACK               = 0x56,
 };
 enum OemSTATUS {
     OEM_SWITCH_ON = 0x00,
@@ -119,7 +120,7 @@ struct Config
 Config deviceSettings;
 
 const byte RESET_FRAME[] = {0x7B, 0x54, 0x02, 0x02, 0x04, 0x7D};
-
+const byte QUERY_FRAME[] = {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07};
 #define CURRENT_VERSION "1.0.2"
 #define OTA_URL "https://back.iotstudio.org/update_fw"
 

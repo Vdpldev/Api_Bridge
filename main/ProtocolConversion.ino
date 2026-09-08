@@ -13,7 +13,7 @@ byte calcChecksum(byte *buf, int len)
     return chk;
 }
 
-byte* TuyaToOem(byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
+byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
     
     //const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D}; Serial.write(f, 7);
     byte dpid;
@@ -84,14 +84,68 @@ byte* TuyaToOem(byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
         
         return OEMBuffer;
     }
-    else
+    else if(cmd == TUYA_CMD_PRODUCT_INFO){
+        
+        
+
+        // 2. Extract Version from the Tuya JSON Payload
+        // The JSON looks like: ... "v":"2.1.17" ...
+        // We look for "v":" and grab the first digit '2'
+        byte verMajor = 0x02; // Default if not found
+        String payload = "";
+        for (int i = 0; i < tuyaLen - 1; i++) payload += (char)tuyaData[i];
+        
+        String pid = "";
+        int pStart = payload.indexOf("\"p\":\"");
+        if (pStart != -1) {
+            int pEnd = payload.indexOf("\"", pStart + 5);
+            pid = payload.substring(pStart + 5, pEnd);
+        }
+
+       
+        int vIdx = payload.indexOf("\"v\":\"");
+        if (vIdx != -1) {
+            verMajor = payload.charAt(vIdx + 5) - '0'; // Extracts '2' from "2.1.17"
+        }
+        
+        
+        byte numFans = 1;
+        byte numSwitches = 4;
+        OEMBuffer[out++] = OEM_CMD_ACK;
+        OEMBuffer[out++] = 4 + numFans + numSwitches ;
+        OEMBuffer[out++] = verMajor;      // Version (0x02)
+        OEMBuffer[out++] = numFans;       // No of Fan (0x01)
+        OEMBuffer[out++] = numSwitches;   // No of Switch (0x04)
+
+        // Append Fan Load Types first
+        for (int i = 0; i < numFans; i++) {
+            OEMBuffer[out++] = 0x04;      // Fan Load Type
+        }
+
+        // Append Switch Load Types next
+        for (int i = 0; i < numSwitches; i++) {
+            OEMBuffer[out++] = 0x01;      // Switch Load Type
+        }
+
+        // Calculate Checksum (Sum of all bytes before CS)
+        byte cs = 0;
+        for (int i = 2; i < out; i++) {
+            cs += OEMBuffer[i];
+        }
+        OEMBuffer[out++] = cs;            // Checksum
+        OEMBuffer[out++] = OEM_END_BYTE;          // End Code
+        *oemLen = out ;
+        
         return OEMBuffer;
 
-    ;
+    }
+    else
+        return OEMBuffer;
 }
 
 void OemToTuya(String *OemData)
 {
+   
     byte tuyaFrame[16];
     int i = 0;
     tuyaFrame[i++] = 0x55;
@@ -163,10 +217,43 @@ void OemToTuya(String *OemData)
     {
         if(oem[idx++] == OEM_ALL_NODE)
         {
-            //55 AA 00 08 00 00 07
-            tuyaFrame[i++] = 0x08;
-            tuyaFrame[i++] = 0x00;
-            tuyaFrame[i++] = 0x00;
+            int out = 0;
+            OEMBuffer[out++] = 0x7B;          // Start Code
+            OEMBuffer[out++] = 0x51;          // Frame Identifier
+            
+            // Length: 2N + 1. For 5 nodes (Fan + 4 Switches), N=5. Length = 11.
+            OEMBuffer[out++] = 11;            
+
+            // --- NODE 1: FAN ---
+            OEMBuffer[out++] = currentStatus.fan_power ? 0xFF : 0x00;
+            // Convert fan speed (assuming 1-5) to 0-100 range
+            OEMBuffer[out++] = (byte)(currentStatus.fan_speed * 20); 
+
+            // --- NODE 2: SWITCH 1 ---
+            OEMBuffer[out++] = currentStatus.switch_1 ? 0xFF : 0x00;
+            OEMBuffer[out++] = 0x00; // No Dimming for simple switch
+
+            // --- NODE 3: SWITCH 2 ---
+            OEMBuffer[out++] = currentStatus.switch_2 ? 0xFF : 0x00;
+            OEMBuffer[out++] = 0x00;
+
+            // --- NODE 4: SWITCH 3 ---
+            OEMBuffer[out++] = currentStatus.switch_3 ? 0xFF : 0x00;
+            OEMBuffer[out++] = 0x00;
+
+            // --- NODE 5: SWITCH 4 ---
+            OEMBuffer[out++] = currentStatus.switch_4 ? 0xFF : 0x00;
+            OEMBuffer[out++] = 0x00;
+
+            // 3. Calculate Checksum (Sum of all bytes before CS)
+            byte cs = 0;
+            for (int i = 0; i < out; i++) {
+                cs += OEMBuffer[i];
+            }
+            OEMBuffer[out++] = cs;            // Checksum
+            OEMBuffer[out++] = 0x7D;          // End Code
+            // 4. Send the frame back to the OEM controller/Serial
+            sendFrame(OEMBuffer, out, "OEM_ALL_STATUS_RESPONSE");
         }
     }
     else if(cmd == OEM_ALL_NODE)
@@ -185,6 +272,12 @@ void OemToTuya(String *OemData)
             Frame[6] = cs;
             pushToMsgQueue(Frame, sizeof(Frame));
         }
+    }
+    else if( cmd == OEM_CMD_DEVICE_INFO)
+    {
+        tuyaFrame[i++] = 0x01;
+        tuyaFrame[i++] = 0x00;
+        tuyaFrame[i++] = 0x00;
     }
     byte cs = 0;
     for (int k = 0; k < i; k++) {
