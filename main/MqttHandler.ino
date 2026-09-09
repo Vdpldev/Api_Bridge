@@ -14,7 +14,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   #endif
 
   if (msgQueue.size() < 10) {
-
     msgQueue.push(msg);
   }
 }
@@ -38,7 +37,7 @@ bool attemptMqttConnect(){
   if (WiFi.status() == WL_CONNECTED && !mqttClient.connected()){
 
     String clientId = "esp8266-client-" + WiFi.macAddress();
-
+    //Serial.print(clientId);
     #ifdef DEBUG
       Serial.println("[MQTT] Attempting connection...");
     #endif

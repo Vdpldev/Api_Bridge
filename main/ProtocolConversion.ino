@@ -162,8 +162,7 @@ void OemToTuya(String *OemData)
 
     byte cmd = oem[idx++] ;
     idx++;
-    if(cmd == OEM_CMD_UPDATE)
-    {
+    if(cmd == OEM_CMD_UPDATE){
         tuyaFrame[i++] = 0x06; // Command: Send
         tuyaFrame[i++] = 0x00; // Length High
         int dataLen1 = 0; 
@@ -213,10 +212,10 @@ void OemToTuya(String *OemData)
                 printCurrentStatus("TUYA_MCU");
         #endif
     }
-    else if(cmd == OEM_NODE_STATUS)
-    {
-        if(oem[idx++] == OEM_ALL_NODE)
-        {
+    else if(cmd == OEM_NODE_STATUS){
+
+        if(oem[idx++] == OEM_ALL_NODE_UPDATE){
+
             int out = 0;
             OEMBuffer[out++] = 0x7B;          // Start Code
             OEMBuffer[out++] = 0x51;          // Frame Identifier
@@ -253,11 +252,36 @@ void OemToTuya(String *OemData)
             OEMBuffer[out++] = cs;            // Checksum
             OEMBuffer[out++] = 0x7D;          // End Code
             // 4. Send the frame back to the OEM controller/Serial
-            sendFrame(OEMBuffer, out, "OEM_ALL_STATUS_RESPONSE");
+            
+            #ifdef DEBUG
+                sendFrame(oemFrame, oemLen, "Converted OEM");
+            #endif
+            
+            // Check if data changed or heartbeat (30s) is needed
+            bool hasChanged = (out != lastLen || memcmp(OEMBuffer, lastFrame, out) != 0);
+            bool forceSend = (millis() - lastHeartbeat > 30000);
+
+            if (hasChanged || forceSend) {
+                if (mqttClient.connected()) {
+                mqttClient.publish(mqtt_pub_topic, OEMBuffer, out);
+                
+                // Update state trackers
+                memcpy(lastFrame, OEMBuffer, out);
+                lastLen = out;
+                lastHeartbeat = millis();
+                
+                #ifdef DEBUG
+                    Serial.println(F("[BRIDGE] Data sent to MQTT."));
+                #endif
+                }
+            }
+            *OemData = "";
+            return;
+
         }
     }
-    else if(cmd == OEM_ALL_NODE)
-    {
+    else if(cmd == OEM_ALL_NODE_UPDATE){
+
         int i = 1 ;
         byte state ;
         byte speed ;
@@ -270,15 +294,19 @@ void OemToTuya(String *OemData)
             byte cs = 0;
             for(int i=0; i<6; i++) cs += Frame[i];
             Frame[6] = cs;
-            pushToMsgQueue(Frame, sizeof(Frame));
+            //pushToMsgQueue(Frame, sizeof(Frame));
         }
+        *OemData = "";
+        return;
     }
-    else if( cmd == OEM_CMD_DEVICE_INFO)
-    {
+    else if( cmd == OEM_CMD_DEVICE_INFO){
+
         tuyaFrame[i++] = 0x01;
         tuyaFrame[i++] = 0x00;
         tuyaFrame[i++] = 0x00;
     }
+
+
     byte cs = 0;
     for (int k = 0; k < i; k++) {
         cs += tuyaFrame[k];

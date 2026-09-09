@@ -9,12 +9,14 @@ void sendFrame(const byte* frame, size_t len, const char* debugMsg)
     Serial.print("\n[MCU] Sent: ");
     Serial.println(debugMsg);
   #endif
+
 }
 
-void blink400ms()        { const byte f[]={0x7B, 0x05, 0x02, 0x0A, 0x0C, 0x7D};       sendFrame(f, 6, "Blink 400ms");  }
-void blink100ms()        { const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D}; sendFrame(f, 7, "Blink 100ms");  }
-void blinkoff()          { const byte f[]={0x7B, 0x05, 0x02, 0x00, 0x02, 0x7D};       sendFrame(f, 6, "Blink Off");    }
-void requestDeviceInfo() { const byte f[]={0x7B, 0x06, 0x01, 0x01, 0x7D};             sendFrame(f, 5, "Request Info"); }
+void blink400ms()        { const byte f[]={0x7B, 0x05, 0x02, 0x0A, 0x0C, 0x7D};                       sendFrame(f, 6, "Blink 400ms");  }
+void blink100ms()        { const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D};                 sendFrame(f, 7, "Blink 100ms");  }
+void blinkoff()          { const byte f[]={0x7B, 0x05, 0x02, 0x00, 0x02, 0x7D};                       sendFrame(f, 6, "Blink Off");    }
+void requestDeviceInfo() { const byte DEVICE_INFO[] = {0x55, 0xAA, 0x00, 0x01, 0x00, 0x00, 0x00};     sendFrame(DEVICE_INFO, sizeof(DEVICE_INFO),"Device Information"); }
+void FrameHeartbeat()    { const byte Heartbeat[] = {0x55, 0xAA, 0x00, TUYA_CMD_HEARTBEAT, 0x00, 0x00, 0xFF};     sendFrame(Heartbeat, sizeof(Heartbeat),"Heart Beat Frame"); }
 
 bool isResetCommand(byte* buf, int len) {
   const byte resetCmd[] = {0x55, 0xAA, 0x03, 0x04, 0x00, 0x00, 0x06};
@@ -90,7 +92,6 @@ void printCurrentStatus(const char* trigger) {
 
 void handleReceivedHexData() {
 
-  const byte f[]= {0x55, 0xAA, 0x00, 0x04, 0x00, 0x00, 0x06};       sendFrame(f, 7, "Response of Reset"); 
   #ifdef DEBUG  
     Serial.println("\n[SYSTEM] Reset Command Match! Cleaning up...");
   #endif  
@@ -99,9 +100,6 @@ void handleReceivedHexData() {
   ESP.restart();
 }
 
-byte lastFrame[64];
-int lastLen = 0;
-unsigned long lastHeartbeat = 0;
 
 
 void processSerialInput() {
@@ -109,7 +107,6 @@ void processSerialInput() {
   while (Serial.available() > 0) {
      // 1. Read byte
     byte b = Serial.read();
-    digitalWrite(STATUS_LED, LOW); // LED ON while receiving
 
      // 2. Prevent Buffer Overflow
     if (bufferIndex < 128) { serialBuffer[bufferIndex++] = b;} 
@@ -142,6 +139,7 @@ void processSerialInput() {
 
         if (isResetCommand(serialBuffer, bufferIndex)) {
           handleReceivedHexData();
+          return;
         }
         byte ver = serialBuffer[2];
         byte cmd = serialBuffer[3];
@@ -152,7 +150,7 @@ void processSerialInput() {
         
         
         if (oemFrame != nullptr && oemLen > 0) {
-          if(oemFrame[1] == 0x56)sendFrame(oemFrame, oemLen, "Converted OEM");
+          
           #ifdef DEBUG
             sendFrame(oemFrame, oemLen, "Converted OEM");
           #endif
@@ -166,7 +164,7 @@ void processSerialInput() {
               mqttClient.publish(mqtt_pub_topic, oemFrame, oemLen);
               
               // Update state trackers
-              memcpy(lastFrame, serialBuffer, bufferIndex);
+              memcpy(lastFrame, oemFrame, oemLen);
               lastLen = bufferIndex;
               lastHeartbeat = millis();
               
@@ -190,22 +188,63 @@ void processSerialInput() {
 
 int captureSerialResponse(uint8_t* buf, size_t maxLen) {
   memset(buf, 0, maxLen); // Clear the buffer first!
-  size_t index = 0;
+  size_t bufferIndex = 0;
+  int oemLen = 0;
   unsigned long startWait = millis();
   // Wait up to 2 seconds
-  while (millis() - startWait < 2000) 
+  while (millis() - startWait < 5000) 
   {
     while (Serial.available()) 
     {
-      uint8_t b = Serial.read();
-      if (index < maxLen - 1) buf[index++] = b;
-      if (b == '}') 
-      {
-        buf[index] = '\0';
-        return index; 
-      }
+        uint8_t b = Serial.read();
+        if (bufferIndex < maxLen - 1) serialBuffer[bufferIndex++] = b;
+      
+          // 3. Check Header (Syncing)
+        if (bufferIndex == 1 && serialBuffer[0] != TUYA_HEADER_HIGH) {bufferIndex = 0;continue;}
+        if (bufferIndex == 2 && serialBuffer[1] != TUYA_HEADER_LOW) {bufferIndex = 0;continue;}
+
+          // 4. Once we have at least the length bytes (Indices 4 and 5)
+
+        if (bufferIndex >= 6) {
+          uint16_t dataLen = ((uint16_t)serialBuffer[4] << 8) | serialBuffer[5];
+          uint16_t expectedLen = 6 + dataLen + 1; // Header(6) + Payload + Checksum(1)
+
+            // 5. Once the full frame has arrived
+          if (bufferIndex == expectedLen) {
+            
+            byte calculatedTuyaCs = 0;
+            for (int i = 0; i < expectedLen - 1; i++) {
+                calculatedTuyaCs += serialBuffer[i];
+            }
+
+            if (calculatedTuyaCs != serialBuffer[expectedLen - 1]) {
+              #ifdef DEBUG
+                  Serial.println(F("[ERROR] Tuya Checksum Mismatch! Discarding."));
+              #endif
+              break;
+            }
+
+            if (isResetCommand(serialBuffer, bufferIndex)) {
+              handleReceivedHexData();
+              return 0;
+            }
+            byte ver = serialBuffer[2];
+            byte cmd = serialBuffer[3];
+            
+            // Handle Logic
+            uint8_t* oemFrame = TuyaToOem(ver, cmd, &serialBuffer[6], dataLen, &oemLen);
+            memcpy(buf, oemFrame, oemLen);
+            return oemLen;
+            
+              // Special command handling
+            lastSerialRead = millis();
+
+              // 6. Reset buffer for next packet
+            bufferIndex = 0;
+          }
+          yield(); // Prevent WDT reset
+        }
     }
-    yield(); // Prevent WDT reset
   }
-  return index;
+  return oemLen;
 }

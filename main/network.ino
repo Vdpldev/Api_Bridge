@@ -16,10 +16,8 @@ void generateMqttTopics(){
   memset(mqtt_sub_topic, 0, sizeof(mqtt_sub_topic));
 
   String mac = WiFi.macAddress();
-
   mac.replace(":", "");
   mac.toLowerCase();
-
   if (mac.length() < 12){
 
     #ifdef DEBUG    
@@ -35,6 +33,7 @@ void generateMqttTopics(){
     String pub = scrambledMac + "s" ;
 
     String sub = scrambledMac + "s";
+    
     
     pub.toCharArray(mqtt_pub_topic, sizeof(mqtt_pub_topic));
     sub.toCharArray(mqtt_sub_topic, sizeof(mqtt_sub_topic));
@@ -128,7 +127,7 @@ void handleTcpConfig(){
 
       String newSSID = doc["ssid"];
       String newPass = doc["password"];
-
+      
       if (newSSID.length() > 0) {
         #ifdef DEBUG
           Serial.println("[TCP] Credentials Valid. Saving...");
@@ -140,7 +139,7 @@ void handleTcpConfig(){
         requestDeviceInfo();
         uint8_t mcuFrame[128];
         int frameLen = captureSerialResponse(mcuFrame, 128);
-         
+
         char clippedTopic[13]; 
         String mac = WiFi.macAddress();
 

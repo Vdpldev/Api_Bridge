@@ -17,8 +17,13 @@ extern char mqtt_pub_topic[18];
 extern char mqtt_sub_topic[18];
 
 unsigned long lastHeartbeatTime = 0;
-int lastWifiStateReported = -1; 
+int lastWifiStateReported = -1;
+static unsigned long lastSerialSend = 0;
 byte currentHeartBeatStatus = 0x00;
+
+byte lastFrame[64];
+int lastLen = 0;
+unsigned long lastHeartbeat = 0;
 
 // Define the structure to hold current device states
 #define STORAGE_SIGNATURE 0xDEADBEEF
@@ -77,7 +82,7 @@ enum OemCommand {
     OEM_CMD_IDX               = 1,
     OEM_CMD_UPDATE            = 0x00,
     OEM_NODE_STATUS           = 0x02,
-    OEM_ALL_NODE              = 0x01,
+    OEM_ALL_NODE_UPDATE       = 0x01,
     OEM_CMD_CONTROL           = 0xA2,
     OEM_CMD_DEVICE_INFO       = 0x06,
     OEM_CMD_ERROR             = 0x15,
@@ -109,7 +114,7 @@ enum DeviceState
   ST_AP_MODE,
   ST_ERROR
 };
-DeviceState currentState = ST_OPERATIONAL;
+DeviceState currentState = ST_INIT;
 
 struct Config 
 {

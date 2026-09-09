@@ -1,14 +1,7 @@
 #include "constant.h"
 
 // #define DEBUG
-void pushToMsgQueue(const byte* frame, size_t len) {
-    String msgStr = "";
-    msgStr.reserve(len); 
-    for (size_t i = 0; i < len; i++) {
-        msgStr += (char)frame[i];
-    }
-    msgQueue.push(msgStr);
-}
+
 void setup(){
 
   Serial.begin(DEBUG_BAUD);
@@ -23,11 +16,11 @@ void setup(){
   
   // // 2. Frame: Query All Status (Forces MCU to report all DPIDs)
   // // 55 AA 00 08 00 00 07
-  const byte queryStatusFrame[] =  {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07};
-  pushToMsgQueue(queryStatusFrame, sizeof(queryStatusFrame));
-  const byte queryFrame[] = {0x7B, 0x02, 0x01, 0x01, 0x7D};
-  pushToMsgQueue(queryFrame, sizeof(queryFrame));
-  // // Push Heartbeat first
+  // const byte queryStatusFrame[] =  {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07};
+  // pushToMsgQueue(queryStatusFrame, sizeof(queryStatusFrame));
+  // const byte queryFrame[] = {0x7B, 0x02, 0x01, 0x01, 0x7D};
+  // pushToMsgQueue(queryFrame, sizeof(queryFrame));
+  // // // Push Heartbeat first
   // //pushToMsgQueue(heartbeatFrame, sizeof(heartbeatFrame));
   
   // //3. Switch 1 On 
@@ -59,16 +52,16 @@ void setup(){
   // const byte ALL_ON[] = {0x7B, 0x01, 0x0B, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  0x6F, 0x7D};
   // pushToMsgQueue(ALL_ON, sizeof(ALL_ON));
 
-  const byte DEVICE_INFO[] = {0x7B, 0x06, 0x01, 0x01, 0x7D};
-  pushToMsgQueue(DEVICE_INFO, sizeof(DEVICE_INFO));
+  // const byte DEVICE_INFO[] = {0x7B, 0x06, 0x01, 0x01, 0x7D};
+  // pushToMsgQueue(DEVICE_INFO, sizeof(DEVICE_INFO));
 
 }
 
 // Function to send Heartbeat (Command 0x00)
 void maintainHeartbeat() {
+
   if (millis() - lastHeartbeatTime >= 5000) {
-    const byte f[] = {0x55, 0xAA, 0x00, TUYA_CMD_HEARTBEAT, 0x00, 0x00, 0xFF};
-    pushToMsgQueue(f, 7);
+    FrameHeartbeat();
     lastHeartbeatTime = millis();
     
     #ifdef DEBUG
@@ -90,7 +83,7 @@ void reportWifiStatus() {
     for(int i=0; i<7; i++) cs += f[i];
     f[7] = cs;
 
-    pushToMsgQueue(f, 8);
+    sendFrame(f, sizeof(f),"HWifi Status");
 
     #ifdef DEBUG
       Serial.print(F("[TUYA] WiFi Status Updated: "));
@@ -101,10 +94,22 @@ void reportWifiStatus() {
 
 // The updated Loop
 void loop() {
+
   runStateMachine();      // Your existing State Machine logic
   
   maintainHeartbeat();    // Handles 5s timer for Heartbeat
   
   reportWifiStatus();     // Reports WiFi/MQTT status changes
+  
+  if (!msgQueue.empty() && (millis() - lastSerialRead > 1000) && (millis() - lastSerialSend > 1000)){
+        //Serial.print("Pop the queue ");
+        
+        
+        String nextMsg = msgQueue.front();
+        OemToTuya(&nextMsg);
+        msgQueue.pop();
+        Serial.print(nextMsg);
+        lastSerialSend = millis();
+      }
   
 }
