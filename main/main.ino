@@ -1,7 +1,14 @@
 #include "constant.h"
 
 // #define DEBUG
-
+void pushToMsgQueue(const byte* frame, size_t len) {
+    String msgStr = "";
+    msgStr.reserve(len); 
+    for (size_t i = 0; i < len; i++) {
+        msgStr += (char)frame[i];
+    }
+    msgQueue.push_back(msgStr);
+}
 void setup(){
 
   Serial.begin(DEBUG_BAUD);
@@ -60,7 +67,7 @@ void setup(){
 // Function to send Heartbeat (Command 0x00)
 void maintainHeartbeat() {
 
-  if (millis() - lastHeartbeatTime >= 5000) {
+  if (millis() - lastHeartbeatTime >= 15000) {
     FrameHeartbeat();
     lastHeartbeatTime = millis();
     
@@ -92,6 +99,15 @@ void reportWifiStatus() {
   }
 }
 
+bool isValidPop(String *Oemdata)
+{
+  const byte* oem = (const byte*)Oemdata->c_str();
+  if(oem[1] == 0x00)
+    return true;
+  else 
+    return false;
+}
+
 // The updated Loop
 void loop() {
 
@@ -100,16 +116,24 @@ void loop() {
   maintainHeartbeat();    // Handles 5s timer for Heartbeat
   
   reportWifiStatus();     // Reports WiFi/MQTT status changes
-  
-  if (!msgQueue.empty() && (millis() - lastSerialRead > 1000) && (millis() - lastSerialSend > 1000)){
+  //(millis() - lastSerialRead > 500) && 
+  if (!msgQueue.empty() && (millis() - lastSerialSend > 100)){
         //Serial.print("Pop the queue ");
         
+        // if(ValidPop){
+        //   msgQueue.pop_back();
+        //   ValidPop = false;
+        // }
+        // else
+        // {
+            String nextMsg = msgQueue.front();
+            // ValidPop = isValidPop(&nextMsg);
+            OemToTuya(&nextMsg);
+            msgQueue.pop_front();
+            Serial.print(nextMsg);
+            lastSerialSend = millis();
+        // }
         
-        String nextMsg = msgQueue.front();
-        OemToTuya(&nextMsg);
-        msgQueue.pop();
-        Serial.print(nextMsg);
-        lastSerialSend = millis();
       }
   
 }

@@ -1,11 +1,12 @@
 #include <ESP8266WiFi.h>
 #include <ArduinoJson.h> 
-#include <queue> 
-std::queue<String> msgQueue;
+#include <deque> 
+std::deque<String> msgQueue;
 
 #ifndef CONSTANT_H
 #define CONSTANT_H
-
+bool ValidPop =  false ;
+int PopIdx = 0;
 IPAddress apIP(192, 168, 4, 1);
 IPAddress apGateway(192, 168, 4, 1);
 IPAddress apSubnet(255, 255, 255, 0);
@@ -25,6 +26,7 @@ byte lastFrame[64];
 int lastLen = 0;
 unsigned long lastHeartbeat = 0;
 
+bool All_Status = false ;
 // Define the structure to hold current device states
 #define STORAGE_SIGNATURE 0xDEADBEEF
 #define EEPROM_SIZE 512
@@ -86,6 +88,7 @@ enum OemCommand {
     OEM_CMD_CONTROL           = 0xA2,
     OEM_CMD_DEVICE_INFO       = 0x06,
     OEM_CMD_ERROR             = 0x15,
+    OEM_CMD_NODE_UPDATE       = 0x52,
     OEM_CMD_ACK               = 0x56,
 };
 enum OemSTATUS {

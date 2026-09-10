@@ -72,11 +72,15 @@ void runStateMachine()
         currentState = ST_IDLE;
       }
     break;
-
+  
     case ST_OPERATIONAL:
       static bool ledReset = false;
-      if(!ledReset) { blinkoff(); ledReset = true; }
       digitalWrite(STATUS_LED, HIGH);
+      if (!All_Status) { 
+          const byte queryStatusFrame[] =  {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07}; 
+          sendFrame(queryStatusFrame,sizeof(queryStatusFrame),"All Node Status"); 
+          All_Status=true;
+        }
       processMqtt();
     
       processSerialInput();

@@ -50,7 +50,7 @@ void updateDeviceState(byte dpid, byte type, byte* data, int len) {
             break;
         case 0x68: // Fan Speed (DPID 104)
             // Tuya 'Value' types are 4 bytes long (Big Endian)
-            currentStatus.fan_speed = (uint8_t)data[len-1]; 
+            currentStatus.fan_speed = (uint8_t)data[len-1];
             break;
         
         case 0x10: // Switch backlight
@@ -156,16 +156,17 @@ void processSerialInput() {
           #endif
           
           // Check if data changed or heartbeat (30s) is needed
-          bool hasChanged = (bufferIndex != lastLen || memcmp(serialBuffer, lastFrame, bufferIndex) != 0);
-          bool forceSend = (millis() - lastHeartbeat > 30000);
+          // bool hasChanged = (bufferIndex != lastLen || memcmp(oemFrame, lastFrame, oemLen) != 0);
+          // bool forceSend = (millis() - lastHeartbeat > 30000);
 
-          if (hasChanged || forceSend) {
+          // if (hasChanged || forceSend) {
             if (mqttClient.connected()) {
+              int len = msgQueue.size() ;
               mqttClient.publish(mqtt_pub_topic, oemFrame, oemLen);
-              
+
               // Update state trackers
               memcpy(lastFrame, oemFrame, oemLen);
-              lastLen = bufferIndex;
+              lastLen = oemLen;
               lastHeartbeat = millis();
               
               #ifdef DEBUG
@@ -173,7 +174,7 @@ void processSerialInput() {
               #endif
             }
           }
-        }
+        // }
 
          // Special command handling
         lastSerialRead = millis();

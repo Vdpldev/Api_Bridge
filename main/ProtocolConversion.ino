@@ -13,6 +13,68 @@ byte calcChecksum(byte *buf, int len)
     return chk;
 }
 
+void AllNodeStatus(byte cmd){
+
+    int out = 0;
+    OEMBuffer[out++] = 0x7B;          // Start Code
+    OEMBuffer[out++] = cmd ;//0x51; //00         // Frame Identifier
+    
+    // Length: 2N + 1. For 5 nodes (Fan + 4 Switches), N=5. Length = 11.
+    OEMBuffer[out++] = 11;            
+
+    // --- NODE 1: FAN ---
+    OEMBuffer[out++] = currentStatus.fan_power ? 0x00 : 0xFF;
+    // Convert fan speed (assuming 1-5) to 0-100 range
+    OEMBuffer[out++] = (byte)(currentStatus.fan_speed * 25); 
+
+    // --- NODE 2: SWITCH 1 ---
+    OEMBuffer[out++] = currentStatus.switch_1 ? 0x00 : 0xFF;
+    OEMBuffer[out++] = 0x00; // No Dimming for simple switch
+
+    // --- NODE 3: SWITCH 2 ---
+    OEMBuffer[out++] = currentStatus.switch_2 ? 0x00 : 0xFF;
+    OEMBuffer[out++] = 0x00;
+
+    // --- NODE 4: SWITCH 3 ---
+    OEMBuffer[out++] = currentStatus.switch_3 ? 0x00 : 0xFF;
+    OEMBuffer[out++] = 0x00;
+
+    // --- NODE 5: SWITCH 4 ---
+    OEMBuffer[out++] = currentStatus.switch_4 ? 0x00 : 0xFF;
+    OEMBuffer[out++] = 0x00;
+
+    // 3. Calculate Checksum (Sum of all bytes before CS)
+    byte cs = 0;
+    for (int i = 0; i < out; i++) {
+        cs += OEMBuffer[i];
+    }
+    OEMBuffer[out++] = cs;            // Checksum
+    OEMBuffer[out++] = 0x7D;          // End Code
+    // 4. Send the frame back to the OEM controller/Serial
+    
+    #ifdef DEBUG
+        sendFrame(oemFrame, out, "Converted OEM");
+    #endif
+    
+    // Check if data changed or heartbeat (30s) is needed
+    bool hasChanged = (out != lastLen || memcmp(OEMBuffer, lastFrame, out) != 0);
+    bool forceSend = (millis() - lastHeartbeat > 30000);
+
+    if (hasChanged || forceSend) {
+        if (mqttClient.connected()) {
+        mqttClient.publish(mqtt_pub_topic, OEMBuffer, out);
+        
+        // Update state trackers
+        memcpy(lastFrame, OEMBuffer, out);
+        lastLen = out;
+        lastHeartbeat = millis();
+        
+        #ifdef DEBUG
+            Serial.println(F("[BRIDGE] Data sent to MQTT."));
+        #endif
+        }
+    }
+}
 byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
     
     //const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D}; Serial.write(f, 7);
@@ -44,7 +106,7 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
                 printCurrentStatus("TUYA_MCU");
         #endif
         // const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D}; Serial.write(f, 7);
-        OEMBuffer[out++] = OEM_CMD_UPDATE;      // Command
+        OEMBuffer[out++] = OEM_CMD_NODE_UPDATE;      // Command
         OEMBuffer[out++] = 0x04 ;      // Length
 
         switch(type){
@@ -172,21 +234,21 @@ void OemToTuya(String *OemData)
         int dataLen2 = 0;
         if( dpid == 0x01){
             // Fan Logic
-            byte speed = oem[idx+1];
-            if (speed > 0) {
+            byte state = ( oem[idx++] == 0xFF) ? 0x00 : 0x01;
+            byte speed = oem[idx++] / (0x19) ;
+            if (speed >= 0 && currentStatus.fan_power && state == 0x01) {
                 idx++;
                 dpid = 0x68; // Fan Speed
                 type = 0x02; // Value (4 bytes)
                 // Reverse scaling: OEM 0-100 to Tuya 1-5
                 // Example: 0x32 (50) / 20 = 2.5 -> 2
-                speed = oem[idx++] / (0x19) ;
                 tuyaVal[0] = 0x00; tuyaVal[1] = 0x00;
                 tuyaVal[2] = 0x00; tuyaVal[3] = speed;
                 dataLen2 = 4;
                 dataLen1 = 4 + dataLen2;
             } else {
                 dpid = 0x66; // Fan Power
-                tuyaVal[0] = ( oem[idx++] == 0xFF) ? 0x00 : 0x01;
+                tuyaVal[0] = state ;
                 dataLen2 = 1;
                 dataLen1 = 4 + dataLen2;
             }
@@ -216,65 +278,7 @@ void OemToTuya(String *OemData)
 
         if(oem[idx++] == OEM_ALL_NODE_UPDATE){
 
-            int out = 0;
-            OEMBuffer[out++] = 0x7B;          // Start Code
-            OEMBuffer[out++] = 0x51;          // Frame Identifier
-            
-            // Length: 2N + 1. For 5 nodes (Fan + 4 Switches), N=5. Length = 11.
-            OEMBuffer[out++] = 11;            
-
-            // --- NODE 1: FAN ---
-            OEMBuffer[out++] = currentStatus.fan_power ? 0x00 : 0xFF;
-            // Convert fan speed (assuming 1-5) to 0-100 range
-            OEMBuffer[out++] = (byte)(currentStatus.fan_speed * 25); 
-
-            // --- NODE 2: SWITCH 1 ---
-            OEMBuffer[out++] = currentStatus.switch_1 ? 0x00 : 0xFF;
-            OEMBuffer[out++] = 0x00; // No Dimming for simple switch
-
-            // --- NODE 3: SWITCH 2 ---
-            OEMBuffer[out++] = currentStatus.switch_2 ? 0x00 : 0xFF;
-            OEMBuffer[out++] = 0x00;
-
-            // --- NODE 4: SWITCH 3 ---
-            OEMBuffer[out++] = currentStatus.switch_3 ? 0x00 : 0xFF;
-            OEMBuffer[out++] = 0x00;
-
-            // --- NODE 5: SWITCH 4 ---
-            OEMBuffer[out++] = currentStatus.switch_4 ? 0x00 : 0xFF;
-            OEMBuffer[out++] = 0x00;
-
-            // 3. Calculate Checksum (Sum of all bytes before CS)
-            byte cs = 0;
-            for (int i = 0; i < out; i++) {
-                cs += OEMBuffer[i];
-            }
-            OEMBuffer[out++] = cs;            // Checksum
-            OEMBuffer[out++] = 0x7D;          // End Code
-            // 4. Send the frame back to the OEM controller/Serial
-            
-            #ifdef DEBUG
-                sendFrame(oemFrame, oemLen, "Converted OEM");
-            #endif
-            
-            // Check if data changed or heartbeat (30s) is needed
-            bool hasChanged = (out != lastLen || memcmp(OEMBuffer, lastFrame, out) != 0);
-            bool forceSend = (millis() - lastHeartbeat > 30000);
-
-            if (hasChanged || forceSend) {
-                if (mqttClient.connected()) {
-                mqttClient.publish(mqtt_pub_topic, OEMBuffer, out);
-                
-                // Update state trackers
-                memcpy(lastFrame, OEMBuffer, out);
-                lastLen = out;
-                lastHeartbeat = millis();
-                
-                #ifdef DEBUG
-                    Serial.println(F("[BRIDGE] Data sent to MQTT."));
-                #endif
-                }
-            }
+            AllNodeStatus(0x51);
             *OemData = "";
             return;
 
@@ -285,7 +289,6 @@ void OemToTuya(String *OemData)
         int i = 1 ;
         byte state ;
         byte speed ;
-        idx++;
         for( i ; i < 6 ;i++)
         {
             byte state = oem[idx++];
@@ -294,8 +297,11 @@ void OemToTuya(String *OemData)
             byte cs = 0;
             for(int i=0; i<6; i++) cs += Frame[i];
             Frame[6] = cs;
-            //pushToMsgQueue(Frame, sizeof(Frame));
+            pushToMsgQueue(Frame, sizeof(Frame));
         }
+        AllNodeStatus(0x50);
+        const byte queryFrame[] = {0x7B, 0x02, 0x01, 0x01, 0x7D};
+        pushToMsgQueue(queryFrame, sizeof(queryFrame));
         *OemData = "";
         return;
     }
@@ -305,7 +311,11 @@ void OemToTuya(String *OemData)
         tuyaFrame[i++] = 0x00;
         tuyaFrame[i++] = 0x00;
     }
-
+    else
+    {
+        *OemData = "";
+        return ;
+    }
 
     byte cs = 0;
     for (int k = 0; k < i; k++) {

@@ -148,6 +148,7 @@ void handleTcpConfig(){
         mac.toCharArray(clippedTopic, sizeof(mqtt_pub_topic));
       
         sendCombinedResponse(client, mcuFrame, frameLen, clippedTopic);
+      
         ESP.restart();
       }
     }
