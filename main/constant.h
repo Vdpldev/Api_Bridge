@@ -1,20 +1,19 @@
 #include <ESP8266WiFi.h>
-#include <ArduinoJson.h> 
-#include <deque> 
+#include <ArduinoJson.h>
+#include <deque>
 std::deque<String> msgQueue;
 
 #ifndef CONSTANT_H
 #define CONSTANT_H
-bool ValidPop =  false ;
-int PopIdx = 0;
+
 IPAddress apIP(192, 168, 4, 1);
 IPAddress apGateway(192, 168, 4, 1);
 IPAddress apSubnet(255, 255, 255, 0);
 
-const char* mqtt_username = "mqtt_mobile_client";
-const char* mqtt_password = "pass123";
+const char *mqtt_username = "mqtt_mobile_client";
+const char *mqtt_password = "pass123";
 
-extern char mqtt_pub_topic[18]; 
+extern char mqtt_pub_topic[18];
 extern char mqtt_sub_topic[18];
 
 unsigned long lastHeartbeatTime = 0;
@@ -26,13 +25,15 @@ byte lastFrame[64];
 int lastLen = 0;
 unsigned long lastHeartbeat = 0;
 
-bool All_Status = false ;
+bool All_Status = false;
+
 // Define the structure to hold current device states
 #define STORAGE_SIGNATURE 0xDEADBEEF
 #define EEPROM_SIZE 512
 
-struct TuyaDeviceState {
-   
+struct TuyaDeviceState
+{
+
     // 1-4 Gang Switches
     bool switch_1;
     bool switch_2;
@@ -42,87 +43,103 @@ struct TuyaDeviceState {
     bool child_lock;
     // Fan Specifics
     bool fan_power;
-    uint8_t fan_speed; // Usually 1-3 or 1-6
-    uint8_t restart_Status;  // 0x00 - off, 0x01 - on, 0x02 - memory
- 
+    uint8_t fan_speed;      // Usually 1-3 or 1-6
+    uint8_t restart_Status; // 0x00 - off, 0x01 - on, 0x02 - memory
 };
-static unsigned long lastSerialRead = 0;
+
 // Create a global instance of the status
 TuyaDeviceState currentStatus = {false, false, false, false, false, false, false, 0, 0};
 
 // Protocol fixed bytes
-enum TuyaProtocol {
+enum TuyaProtocol
+{
     TUYA_HEADER_HIGH = 0x55,
-    TUYA_HEADER_LOW  = 0xAA,
+    TUYA_HEADER_LOW = 0xAA,
+    TUYA_LENGTH_HIGH = 0x00,
+    TUYA_LENGTH_LOW = 0x00,
+    TUYA_VERSION_SENT_BY_MODULE = 0x00,
+    TUYA_DATA_TYPE_SPEED = 0x02,
+    TUYA_DATA_TYPE_SWITCHES = 0x01,
 };
 
 // Official Tuya Command IDs (The 4th byte in the frame)
-enum TuyaCommand {
-    TUYA_CMD_HEARTBEAT     = 0x00,
-    TUYA_CMD_PRODUCT_INFO  = 0x01,
-    TUYA_CMD_WORKING_MODE  = 0x02,
+enum TuyaCommand
+{
+    TUYA_CMD_HEARTBEAT = 0x00,
+    TUYA_CMD_PRODUCT_INFO = 0x01,
+    TUYA_CMD_WORKING_MODE = 0x02,
     TUYA_CMD_REPORT_STATUS = 0x07, // MCU reports state to Module
-    TUYA_CMD_SEND_COMMAND  = 0x06, // Module sends command to MCU
-    TUYA_CMD_QUERY_STATUS  = 0x08  // Module queries MCU
+    TUYA_CMD_SEND_COMMAND = 0x06,  // Module sends command to MCU
+    TUYA_CMD_QUERY_STATUS = 0x08   // Module queries MCU
+};
+
+enum TuyaSTATUS
+{
+    TUYA_SWITCH_ON = 0x01,
+    TUYA_SWITCH_OFF = 0x00
 };
 
 // Data Point IDs (DPIDs) - Specific to your device
-enum TuyaDPID {
-    DPID_SWITCH_1  = 0x01,
-    DPID_FAN_SWITCH = 0x66, // 102: Fan On/Off
-    DPID_FAN_SPEED  = 0x68  // 104: Fan Speed (1-3 or 1-6)
+enum TuyaDPID
+{
+    DPID_SWITCH_1          = 0x01,
+    DPID_SWITCH_2          = 0x02,
+    DPID_SWITCH_3          = 0x03,
+    DPID_SWITCH_4          = 0x04,
+    DPID_BACKLIGHT         = 0X10,
+    DPID_CHILD_LOCK        = 0x65,
+    DPID_FAN_1_SWITCH      = 0x66, // 102: Fan On/Off
+    DPID_FAN_1_SPEED       = 0x68   // 104: Fan Speed (1-3 or 1-6)
 };
 // Frame Markers
-enum OemProtocol {
+enum OemProtocol
+{
     OEM_START_BYTE = 0x7B, // '{' - Start of Frame
-    OEM_END_BYTE   = 0x7D,  // '}' - End of Frame
-    
+    OEM_END_BYTE = 0x7D,   // '}' - End of Frame
 };
 
 // Command types for your specific system
-enum OemCommand {
-    OEM_CMD_IDX               = 1,
-    OEM_CMD_UPDATE            = 0x00,
-    OEM_NODE_STATUS           = 0x02,
-    OEM_ALL_NODE_UPDATE       = 0x01,
-    OEM_CMD_CONTROL           = 0xA2,
-    OEM_CMD_DEVICE_INFO       = 0x06,
-    OEM_CMD_ERROR             = 0x15,
-    OEM_CMD_NODE_UPDATE       = 0x52,
-    OEM_CMD_ACK               = 0x56,
+enum OemCommand
+{
+    OEM_CMD_IDX = 1,
+    OEM_CMD_UPDATE = 0x00,
+    OEM_CMD_UPDATE_DATA_LENGTH = 0x04,
+    OEM_NODE_STATUS = 0x02,
+    OEM_ALL_NODE_UPDATE = 0x01,
+    OEM_CMD_CONTROL = 0xA2,
+    OEM_CMD_DEVICE_INFO = 0x06,
+    OEM_CMD_ERROR = 0x15,
+    OEM_CMD_NODE_UPDATE = 0x52,
+    OEM_CMD_ACK = 0x56,
+    OEM_CMD_BACKLIGHT = 0x09
 };
-enum OemSTATUS {
+enum OemSTATUS
+{
     OEM_SWITCH_ON = 0x00,
-    OEM_SWITCH_OFF= 0xFF
+    OEM_SWITCH_OFF = 0xFF
 };
 // Error Codes (Optional but helpful)
-enum OemError {
-    ERR_CHECKSUM = 0x01,
-    ERR_INVALID_CMD = 0x02,
-    //ERR_TIMEOUT = 0x03
-};
 
-
-enum DeviceState 
+enum DeviceState
 {
-  ST_INIT,
-  ST_LOAD_CONFIG,
-  ST_WIFI_CONNECT,
-  ST_WIFI_WAITING,
-  ST_MQTT_CONNECT,
-  ST_OPERATIONAL,
-  ST_OTA_CHECK,
-  ST_OTA_PERFORM,
-  ST_IDLE,
-  ST_AP_MODE,
-  ST_ERROR
+    ST_INIT,
+    ST_LOAD_CONFIG,
+    ST_WIFI_CONNECT,
+    ST_WIFI_WAITING,
+    ST_MQTT_CONNECT,
+    ST_OPERATIONAL,
+    ST_OTA_CHECK,
+    ST_OTA_PERFORM,
+    ST_IDLE,
+    ST_AP_MODE,
+    ST_ERROR
 };
 DeviceState currentState = ST_INIT;
 
-struct Config 
+struct Config
 {
-  char ssid[32];
-  char password[32];
+    char ssid[32];
+    char password[32];
 };
 
 Config deviceSettings;

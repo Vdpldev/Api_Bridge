@@ -149,7 +149,7 @@ void handleTcpConfig(){
       
         sendCombinedResponse(client, mcuFrame, frameLen, clippedTopic);
       
-        ESP.restart();
+        Restart();
       }
     }
     #ifdef DEBUG
@@ -161,7 +161,9 @@ void handleTcpConfig(){
     #endif
   }
 }
-
+void Restart(){
+  currentState = ST_LOAD_CONFIG;
+}
 void sendCombinedResponse(WiFiClient& client, uint8_t* frame, int frameLen, char* topic){
 
   uint8_t masterBuffer[TCP_BUFFER_SIZE]; 

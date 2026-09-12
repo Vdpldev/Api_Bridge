@@ -5,7 +5,7 @@ byte calcChecksum(byte *buf, int len)
 {
     byte chk = 0;
 
-    for(int i = 1; i < len; i++)
+    for(int i = 0; i < len; i++)
     {
         chk += buf[i];
     }
@@ -75,6 +75,7 @@ void AllNodeStatus(byte cmd){
         }
     }
 }
+
 byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
     
     //const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D}; Serial.write(f, 7);
@@ -98,48 +99,101 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
     
     if(cmd == TUYA_CMD_REPORT_STATUS ){
 
+        bool changed = false ;
+        TuyaDeviceState oldState = currentStatus;
         byte* dData = &tuyaData[idx];
-
+        
         // Update our struct
         updateDeviceState(dpid, type, dData, dataLen);
+
+        switch(dpid){
+
+            case DPID_SWITCH_1:
+                changed = (oldState.switch_1 != currentStatus.switch_1);
+                break;
+
+            case DPID_SWITCH_2:
+                changed = (oldState.switch_2 != currentStatus.switch_2);
+                break;
+
+            case DPID_SWITCH_3:
+                changed = (oldState.switch_3 != currentStatus.switch_3);
+                break;
+
+            case DPID_SWITCH_4:
+                changed = (oldState.switch_4 != currentStatus.switch_4);
+                break;
+
+            case DPID_FAN_1_SWITCH:
+                changed = (oldState.fan_power != currentStatus.fan_power);
+                break;
+
+            case DPID_FAN_1_SPEED:
+                changed = (oldState.fan_speed != currentStatus.fan_speed);
+                break;
+
+            case DPID_CHILD_LOCK:
+                changed = (oldState.child_lock != currentStatus.child_lock);
+                break;
+            
+            case DPID_BACKLIGHT:
+                changed = (oldState.child_lock != currentStatus.child_lock);
+                break;
+        }
+
+        // Nothing changed -> don't publish
+        if(!changed){
+
+            *oemLen = 0;
+            return nullptr;     // caller should skip publish
+        }
         #ifdef DEBUG  
                 printCurrentStatus("TUYA_MCU");
         #endif
-        // const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D}; Serial.write(f, 7);
-        OEMBuffer[out++] = OEM_CMD_NODE_UPDATE;      // Command
-        OEMBuffer[out++] = 0x04 ;      // Length
+        if(dpid == DPID_BACKLIGHT){
+            OEMBuffer[out++] = OEM_CMD_BACKLIGHT;
+            OEMBuffer[out++] = 0x02;
+            OEMBuffer[out++] = tuyaData[idx] ? OEM_SWITCH_ON : OEM_SWITCH_OFF ;
+            
+        }
+        else if(dpid == DPID_CHILD_LOCK){
+            OEMBuffer[out++] = OEM_CMD_BACKLIGHT;
+            OEMBuffer[out++] = 0x02;
+            OEMBuffer[out++] = tuyaData[idx] ? OEM_SWITCH_ON : OEM_SWITCH_OFF ;
+            
+        }
+        else{
+            OEMBuffer[out++] = OEM_CMD_NODE_UPDATE;      // Command
+            OEMBuffer[out++] = OEM_CMD_UPDATE_DATA_LENGTH  ;      // Length
 
-        switch(type){
-            case 0x01:      // BOOL
-            {
-                 /* Node Number */
-                if(dpid == DPID_FAN_SWITCH) OEMBuffer[out++] = 0x01 ;
-                else OEMBuffer[out++] = dpid+1;
-                byte value = tuyaData[idx];
-
-                if(value)
-                    OEMBuffer[out++] = OEM_SWITCH_ON;   // ON
-                else
-                    OEMBuffer[out++] = OEM_SWITCH_OFF;   // OFF
+            switch(type){
+                case TUYA_DATA_TYPE_SWITCHES : {     // BOOL
                 
-                if(dpid == DPID_FAN_SWITCH) OEMBuffer[out++] = (byte) (currentStatus.fan_speed * 25) ;
-                else OEMBuffer[out++] = 0x00;
+                    /* Node Number */
+                    if(dpid == DPID_FAN_1_SWITCH) OEMBuffer[out++] = 0x01 ;
+                    else OEMBuffer[out++] = dpid+1;
 
-                break;
-            }
+                    OEMBuffer[out++] = tuyaData[idx] ? OEM_SWITCH_ON : OEM_SWITCH_OFF;   // ON
+                    
+                    
+                    if(dpid == DPID_FAN_1_SWITCH) OEMBuffer[out++] = (byte) (currentStatus.fan_speed * 25) ;
+                    else OEMBuffer[out++] = 0x00;
 
-            case 0x02:      // VALUE
-            {
-                dpid = 0x01 ;
-                int value =(int)tuyaData[idx+3];
-                OEMBuffer[out++] = dpid;
-                OEMBuffer[out++] = OEM_SWITCH_ON;           // ON
-                OEMBuffer[out++] = (byte)(value * 25 );    // Dimmer
-                break;
+                    break;
+                
+                }
+                case TUYA_DATA_TYPE_SPEED :{      // VALUE
+                
+                    dpid = 0x01 ;
+                    int value =(int)tuyaData[idx+3];
+                    OEMBuffer[out++] = dpid;
+                    OEMBuffer[out++] = OEM_SWITCH_ON;           // ON
+                    OEMBuffer[out++] = (byte)(value * 25 );    // Dimmer
+                    break;
+                }
             }
         }
-
-        OEMBuffer[out++] = calcChecksum(OEMBuffer, 6);
+        OEMBuffer[out++] = calcChecksum(&OEMBuffer[2], int(OEMBuffer[2]) );
 
         OEMBuffer[out++] = OEM_END_BYTE;
         *oemLen = out ;
@@ -210,9 +264,10 @@ void OemToTuya(String *OemData)
    
     byte tuyaFrame[16];
     int i = 0;
-    tuyaFrame[i++] = 0x55;
-    tuyaFrame[i++] = 0xAA;
-    tuyaFrame[i++] = 0x00; // Version
+
+    tuyaFrame[i++] = TUYA_HEADER_HIGH;
+    tuyaFrame[i++] = TUYA_HEADER_LOW;
+    tuyaFrame[i++] = TUYA_VERSION_SENT_BY_MODULE ; // Version
     
     //Serial.println(*OemData);
     if (OemData->length() < 2) return;
@@ -225,51 +280,53 @@ void OemToTuya(String *OemData)
     byte cmd = oem[idx++] ;
     idx++;
     if(cmd == OEM_CMD_UPDATE){
-        tuyaFrame[i++] = 0x06; // Command: Send
-        tuyaFrame[i++] = 0x00; // Length High
-        int dataLen1 = 0; 
+        tuyaFrame[i++] = TUYA_CMD_SEND_COMMAND; // Command: Send
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH; // Length High
+
+        int FInalDataLength = 0; 
         byte dpid  = oem[idx++];
-        byte type = 0x01;;
+        byte type = TUYA_DATA_TYPE_SWITCHES;;
         byte tuyaVal[4];
-        int dataLen2 = 0;
+        int DataLength = 0;
+
         if( dpid == 0x01){
             // Fan Logic
-            byte state = ( oem[idx++] == 0xFF) ? 0x00 : 0x01;
+            byte state = ( oem[idx++] == OEM_SWITCH_OFF ) ? TUYA_SWITCH_OFF : TUYA_SWITCH_ON;
             byte speed = oem[idx++] / (0x19) ;
-            if (speed >= 0 && currentStatus.fan_power && state == 0x01) {
+            if (speed >= 0 && currentStatus.fan_power && state == TUYA_SWITCH_ON) {
                 idx++;
-                dpid = 0x68; // Fan Speed
-                type = 0x02; // Value (4 bytes)
+                dpid = DPID_FAN_1_SPEED ; // Fan Speed
+                type = TUYA_DATA_TYPE_SPEED; // Value (4 bytes)
                 // Reverse scaling: OEM 0-100 to Tuya 1-5
                 // Example: 0x32 (50) / 20 = 2.5 -> 2
                 tuyaVal[0] = 0x00; tuyaVal[1] = 0x00;
                 tuyaVal[2] = 0x00; tuyaVal[3] = speed;
-                dataLen2 = 4;
-                dataLen1 = 4 + dataLen2;
+                DataLength = 4;
+                FInalDataLength = 4 + DataLength;
             } else {
-                dpid = 0x66; // Fan Power
+                dpid = DPID_FAN_1_SWITCH; // Fan Power
                 tuyaVal[0] = state ;
-                dataLen2 = 1;
-                dataLen1 = 4 + dataLen2;
+                DataLength = 1;
+                FInalDataLength = 4 + DataLength;
             }
         }else{
             dpid -= 1 ;
-            tuyaVal[0] = ( oem[idx++] == 0xFF) ? 0x00 : 0x01;
-            dataLen2 = 1;
-            dataLen1 = 4 + dataLen2;
+            tuyaVal[0] = ( oem[idx++] == OEM_SWITCH_OFF) ? TUYA_SWITCH_OFF : TUYA_SWITCH_ON;
+            DataLength = 1;
+            FInalDataLength = 4 + DataLength;
         }
-        tuyaFrame[i++] = (byte)dataLen1;
+        tuyaFrame[i++] = (byte)FInalDataLength;
         tuyaFrame[i++] = dpid;
         tuyaFrame[i++] = type;
-        tuyaFrame[i++] = 0x00; // Data Len High
-        tuyaFrame[i++] = (byte)dataLen2;
-        for (int j = 0; j < dataLen2 ; j++) {
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH; // Data Len High
+        tuyaFrame[i++] = (byte)DataLength;
+        for (int j = 0; j < DataLength ; j++) {
             tuyaFrame[i++] = tuyaVal[j];
         }
 
         
         // Update our struct
-        updateDeviceState(dpid, type, tuyaVal, dataLen2);
+        updateDeviceState(dpid, type, tuyaVal, DataLength);
         #ifdef DEBUG  
                 printCurrentStatus("TUYA_MCU");
         #endif
@@ -293,35 +350,38 @@ void OemToTuya(String *OemData)
         {
             byte state = oem[idx++];
             byte speed = oem[idx++];
-            byte Frame[] = {0x7B, 0x00, 0x04, byte(i), state, speed , 0x00 ,0x7D };
-            byte cs = 0;
-            for(int i=0; i<6; i++) cs += Frame[i];
-            Frame[6] = cs;
+            byte Frame[] = {
+                OEM_START_BYTE, 
+                OEM_CMD_UPDATE, 
+                OEM_CMD_UPDATE_DATA_LENGTH, 
+                byte(i), 
+                state, 
+                speed , 
+                0x00 ,
+                OEM_END_BYTE 
+            };            
+            Frame[6] =  calcChecksum(&Frame[2], int(Frame[2]));
             pushToMsgQueue(Frame, sizeof(Frame));
         }
         AllNodeStatus(0x50);
-        const byte queryFrame[] = {0x7B, 0x02, 0x01, 0x01, 0x7D};
+        const byte queryFrame[] = {OEM_START_BYTE, OEM_NODE_STATUS, 0x01, 0x01, OEM_END_BYTE};
         pushToMsgQueue(queryFrame, sizeof(queryFrame));
         *OemData = "";
         return;
     }
     else if( cmd == OEM_CMD_DEVICE_INFO){
 
-        tuyaFrame[i++] = 0x01;
-        tuyaFrame[i++] = 0x00;
-        tuyaFrame[i++] = 0x00;
+        tuyaFrame[i++] = TUYA_CMD_PRODUCT_INFO;
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH;
+        tuyaFrame[i++] = TUYA_LENGTH_LOW;
     }
-    else
-    {
+    else{
         *OemData = "";
         return ;
     }
 
-    byte cs = 0;
-    for (int k = 0; k < i; k++) {
-        cs += tuyaFrame[k];
-    }
-    tuyaFrame[i++] = cs;
+    
+    tuyaFrame[i++] = calcChecksum(tuyaFrame, i);
 
     *OemData = "";
     for (int k = 0; k < i; k++) {

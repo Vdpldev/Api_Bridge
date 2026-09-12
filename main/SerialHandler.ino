@@ -12,9 +12,6 @@ void sendFrame(const byte* frame, size_t len, const char* debugMsg)
 
 }
 
-void blink400ms()        { const byte f[]={0x7B, 0x05, 0x02, 0x0A, 0x0C, 0x7D};                       sendFrame(f, 6, "Blink 400ms");  }
-void blink100ms()        { const byte f[]={0x7B, 0x05, 0x03, 0x01, 0x01, 0x05, 0x7D};                 sendFrame(f, 7, "Blink 100ms");  }
-void blinkoff()          { const byte f[]={0x7B, 0x05, 0x02, 0x00, 0x02, 0x7D};                       sendFrame(f, 6, "Blink Off");    }
 void requestDeviceInfo() { const byte DEVICE_INFO[] = {0x55, 0xAA, 0x00, 0x01, 0x00, 0x00, 0x00};     sendFrame(DEVICE_INFO, sizeof(DEVICE_INFO),"Device Information"); }
 void FrameHeartbeat()    { const byte Heartbeat[] = {0x55, 0xAA, 0x00, TUYA_CMD_HEARTBEAT, 0x00, 0x00, 0xFF};     sendFrame(Heartbeat, sizeof(Heartbeat),"Heart Beat Frame"); }
 
@@ -33,36 +30,35 @@ void updateDeviceState(byte dpid, byte type, byte* data, int len) {
     // Type 0x01 = Boolean, 0x02 = Value (4 bytes), 0x04 = Enum (1 byte)
     
     switch (dpid) {
-        case 0x01: // Switch 1
+        case DPID_SWITCH_1: // Switch 1
             currentStatus.switch_1 = (data[0] == 0x01);
             break;
-        case 0x02: // Switch 2
+        case DPID_SWITCH_2: // Switch 2
             currentStatus.switch_2 = (data[0] == 0x01);
             break;
-        case 0x03: // Switch 2
+        case DPID_SWITCH_3: // Switch 2
             currentStatus.switch_3 = (data[0] == 0x01);
             break;
-        case 0x04: // Switch 2
+        case DPID_SWITCH_4: // Switch 2
             currentStatus.switch_4 = (data[0] == 0x01);
             break;
-        case 0x66: // Fan Power (DPID 102)
+        case DPID_FAN_1_SWITCH: // Fan Power (DPID 102)
             currentStatus.fan_power = (data[0] == 0x01);
             break;
-        case 0x68: // Fan Speed (DPID 104)
+        case DPID_FAN_1_SPEED: // Fan Speed (DPID 104)
             // Tuya 'Value' types are 4 bytes long (Big Endian)
             currentStatus.fan_speed = (uint8_t)data[len-1];
             break;
         
-        case 0x10: // Switch backlight
+        case DPID_BACKLIGHT: // Switch backlight
             currentStatus.switch_BL = (data[0] == 0x01); 
             break;
           
-        case 0x65: // Child Lock
+        case DPID_CHILD_LOCK: // Child Lock
             currentStatus.child_lock = (data[0] == 0x01) ; 
             break;
           
-        case 0x0E: // Fan Speed (DPID 104)
-            // Tuya 'Value' types are 4 bytes long (Big Endian)
+        case 0x0E: // RESTART STATUS
             currentStatus.restart_Status =  (uint8_t)data[len-1]; 
             break;
         
@@ -94,8 +90,7 @@ void handleReceivedHexData() {
 
   #ifdef DEBUG  
     Serial.println("\n[SYSTEM] Reset Command Match! Cleaning up...");
-  #endif  
-  blink100ms(); 
+  #endif
   clearEEPROM();
   ESP.restart();
 }
@@ -119,6 +114,7 @@ void processSerialInput() {
      // 4. Once we have at least the length bytes (Indices 4 and 5)
 
     if (bufferIndex >= 6) {
+
       uint16_t dataLen = ((uint16_t)serialBuffer[4] << 8) | serialBuffer[5];
       uint16_t expectedLen = 6 + dataLen + 1; // Header(6) + Payload + Checksum(1)
 
@@ -160,7 +156,7 @@ void processSerialInput() {
           // bool forceSend = (millis() - lastHeartbeat > 30000);
 
           // if (hasChanged || forceSend) {
-            if (mqttClient.connected()) {
+            if (mqttClient.connected() ) {
               int len = msgQueue.size() ;
               mqttClient.publish(mqtt_pub_topic, oemFrame, oemLen);
 
@@ -176,8 +172,6 @@ void processSerialInput() {
           }
         // }
 
-         // Special command handling
-        lastSerialRead = millis();
 
          // 6. Reset buffer for next packet
         bufferIndex = 0;
@@ -237,8 +231,7 @@ int captureSerialResponse(uint8_t* buf, size_t maxLen) {
             memcpy(buf, oemFrame, oemLen);
             return oemLen;
             
-              // Special command handling
-            lastSerialRead = millis();
+            
 
               // 6. Reset buffer for next packet
             bufferIndex = 0;
