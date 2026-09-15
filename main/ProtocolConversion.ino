@@ -151,15 +151,13 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
                 printCurrentStatus("TUYA_MCU");
         #endif
         if(dpid == DPID_BACKLIGHT){
-            OEMBuffer[out++] = OEM_CMD_BACKLIGHT;
-            OEMBuffer[out++] = 0x02;
-            OEMBuffer[out++] = tuyaData[idx] ? OEM_SWITCH_ON : OEM_SWITCH_OFF ;
-            
+            OEMBuffer[out++] = OEM_RSP_BACKLIGHT;
+            OEMBuffer[out++] = 0x01;            
         }
         else if(dpid == DPID_CHILD_LOCK){
-            OEMBuffer[out++] = OEM_CMD_BACKLIGHT;
+            OEMBuffer[out++] = OEM_RSP_CHILD_LOCK;
             OEMBuffer[out++] = 0x02;
-            OEMBuffer[out++] = tuyaData[idx] ? OEM_SWITCH_ON : OEM_SWITCH_OFF ;
+            OEMBuffer[out++] = 0x00 ;
             
         }
         else{
@@ -217,16 +215,20 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
             int pEnd = payload.indexOf("\"", pStart + 5);
             pid = payload.substring(pStart + 5, pEnd);
         }
+        Serial.print(pid);
 
-       
         int vIdx = payload.indexOf("\"v\":\"");
         if (vIdx != -1) {
             verMajor = payload.charAt(vIdx + 5) - '0'; // Extracts '2' from "2.1.17"
         }
-        
-        
         byte numFans = 1;
         byte numSwitches = 4;
+
+        if(pid == "izmvz8zx9jw9ibfg")
+            numFans = 1;
+            numSwitches = 4;
+
+
         OEMBuffer[out++] = OEM_CMD_ACK;
         OEMBuffer[out++] = 4 + numFans + numSwitches ;
         OEMBuffer[out++] = verMajor;      // Version (0x02)
@@ -259,8 +261,8 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
         return OEMBuffer;
 }
 
-void OemToTuya(String *OemData)
-{
+void OemToTuya(String *OemData){
+
    
     byte tuyaFrame[16];
     int i = 0;
@@ -374,6 +376,28 @@ void OemToTuya(String *OemData)
         tuyaFrame[i++] = TUYA_CMD_PRODUCT_INFO;
         tuyaFrame[i++] = TUYA_LENGTH_HIGH;
         tuyaFrame[i++] = TUYA_LENGTH_LOW;
+    }
+    else if(cmd == OEM_CMD_BACKLIGHT){
+        tuyaFrame[i++] = TUYA_CMD_SEND_COMMAND; // Command: Send
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH; // Length High
+        tuyaFrame[i++] = 0x05;
+        tuyaFrame[i++] = DPID_BACKLIGHT;
+        tuyaFrame[i++] = TUYA_DATA_TYPE_SWITCHES;
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH;
+        tuyaFrame[i++] = 0X01;
+        tuyaFrame[i++] = oem[idx];
+        
+    }
+    else if(cmd == OEM_CMD_CHILD_LOCK){
+        tuyaFrame[i++] = TUYA_CMD_SEND_COMMAND; // Command: Send
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH; // Length High
+        tuyaFrame[i++] = 0x05;
+        tuyaFrame[i++] = DPID_CHILD_LOCK;
+        tuyaFrame[i++] = TUYA_DATA_TYPE_SWITCHES;
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH;
+        tuyaFrame[i++] = 0X01;
+        tuyaFrame[i++] = (oem[idx+1] == 0xFF) ? 0x00 : 0x01 ;
+        
     }
     else{
         *OemData = "";
