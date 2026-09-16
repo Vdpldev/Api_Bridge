@@ -1,7 +1,13 @@
 #include <ESP8266WiFi.h>
+<<<<<<< HEAD
 #include <ArduinoJson.h>
 #include <deque>
 std::deque<String> msgQueue;
+=======
+#include <ArduinoJson.h> 
+#include <queue> 
+std::queue<String> msgQueue;
+>>>>>>> 13bb0663cbc367c3f5669d25100a7fcce62a0dfa
 
 #ifndef CONSTANT_H
 #define CONSTANT_H
@@ -10,6 +16,7 @@ IPAddress apIP(192, 168, 4, 1);
 IPAddress apGateway(192, 168, 4, 1);
 IPAddress apSubnet(255, 255, 255, 0);
 
+<<<<<<< HEAD
 const char *mqtt_username = "mqtt_mobile_client";
 const char *mqtt_password = "pass123";
 
@@ -143,12 +150,44 @@ struct Config
 {
     char ssid[32];
     char password[32];
+=======
+const char* mqtt_username = "mqtt_mobile_client";
+const char* mqtt_password = "pass123";
+
+extern char mqtt_pub_topic[18]; 
+extern char mqtt_sub_topic[18];
+
+enum DeviceState 
+{
+  ST_INIT,
+  ST_LOAD_CONFIG,
+  ST_WIFI_CONNECT,
+  ST_WIFI_WAITING,
+  ST_MQTT_CONNECT,
+  ST_OPERATIONAL,
+  ST_OTA_CHECK,
+  ST_OTA_PERFORM,
+  ST_IDLE,
+  ST_AP_MODE,
+  ST_ERROR
+};
+DeviceState currentState = ST_INIT;
+
+struct Config 
+{
+  char ssid[32];
+  char password[32];
+>>>>>>> 13bb0663cbc367c3f5669d25100a7fcce62a0dfa
 };
 
 Config deviceSettings;
 
 const byte RESET_FRAME[] = {0x7B, 0x54, 0x02, 0x02, 0x04, 0x7D};
+<<<<<<< HEAD
 const byte QUERY_FRAME[] = {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07};
+=======
+
+>>>>>>> 13bb0663cbc367c3f5669d25100a7fcce62a0dfa
 #define CURRENT_VERSION "1.0.2"
 #define OTA_URL "https://back.iotstudio.org/update_fw"
 

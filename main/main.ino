@@ -1,6 +1,7 @@
 #include "constant.h"
 
 // #define DEBUG
+<<<<<<< HEAD
 void pushToMsgQueue(const byte *frame, size_t len)
 {
   String msgStr = "";
@@ -80,4 +81,18 @@ void loop()
     Serial.print(nextMsg);
     lastSerialSend = millis();
   }
+=======
+
+void setup() 
+{
+  Serial.begin(DEBUG_BAUD);
+  #ifdef DEBUG
+    Serial.println("--- SYSTEM BOOTING ---");
+  #endif
+}
+
+void loop() 
+{
+  runStateMachine(); // Single State Machine for everything.
+>>>>>>> 13bb0663cbc367c3f5669d25100a7fcce62a0dfa
 }
