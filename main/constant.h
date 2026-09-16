@@ -1,6 +1,12 @@
 #include <ESP8266WiFi.h>
 #include <ArduinoJson.h>
 #include <deque>
+#include <EEPROM.h>
+#include <time.h>
+
+bool otaCheckedToday = false;
+
+
 std::deque<String> msgQueue;
 
 #ifndef CONSTANT_H
@@ -149,8 +155,33 @@ Config deviceSettings;
 
 const byte RESET_FRAME[] = {0x7B, 0x54, 0x02, 0x02, 0x04, 0x7D};
 const byte QUERY_FRAME[] = {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07};
+
 #define CURRENT_VERSION "1.0.2"
-#define OTA_URL "https://back.iotstudio.org/update_fw"
+#define OTA_MAGIC 0x55AA55AA
+
+//#define OTA_URL "https://back.iotstudio.org/update_fw"
+
+const char* VERSION_URL =
+"https://drive.google.com/uc?export=download&id=1kgM-aPM1m7cmDA-OR2QhUG_2Dx1Ko56C";
+
+const char* FW_URL =
+"https://drive.google.com/uc?export=download&id=1NPBIca_iOxjLEM5BBgz1OBAsg1bMruf2";
+
+struct OTAState
+{
+  uint32_t magic;
+
+  bool updatePending;
+
+  bool firmwareConfirmed;
+
+  uint32_t bootAttempts;
+
+  char version[16];
+};
+String txt;
+OTAState otaState;
+unsigned long healthCheckStart = 0;
 
 #define MQTT_BROKER "mbd.iotstudio.org"
 #define MQTT_PORT 1883

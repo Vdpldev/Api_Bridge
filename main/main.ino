@@ -65,19 +65,28 @@ void reportWifiStatus()
 // The updated Loop
 void loop()
 {
+  
 
   runStateMachine(); // Your existing State Machine logic
 
   maintainHeartbeat(); // Handles 5s timer for Heartbeat
 
   reportWifiStatus(); // Reports WiFi/MQTT status changes
+
   if (!msgQueue.empty() && (millis() - lastSerialSend > 100))
   {
-
+    
     String nextMsg = msgQueue.front();
-    OemToTuya(&nextMsg);
-    msgQueue.pop_front();
-    Serial.print(nextMsg);
-    lastSerialSend = millis();
+    if(nextMsg == "{@}"){
+      currentState = ST_OTA_CHECK;
+      msgQueue.pop_front();
+    }
+    else
+    {
+      OemToTuya(&nextMsg);
+      msgQueue.pop_front();
+      Serial.print(nextMsg);
+      lastSerialSend = millis();
+    }
   }
 }
