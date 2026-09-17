@@ -22,16 +22,16 @@ const char *mqtt_password = "pass123";
 extern char mqtt_pub_topic[18];
 extern char mqtt_sub_topic[18];
 
-unsigned long lastHeartbeatTime = 0;
-int lastWifiStateReported = -1;
-static unsigned long lastSerialSend = 0;
-byte currentHeartBeatStatus = 0x00;
+unsigned long lastHeartbeatSentAt = 0;
+int lastWifiStatusReported = -1;
+static unsigned long lastSerialSendAt = 0;
+byte currentHeartbeatStatus = 0x00;
 
-byte lastFrame[64];
-int lastLen = 0;
-unsigned long lastHeartbeat = 0;
+byte lastSentFrame[64];
+int lastFrameLength = 0;
+unsigned long lastHeartbeatMs = 0;
 
-bool All_Status = false;
+bool allNodesStatusReceived = false;
 
 // Define the structure to hold current device states
 #define STORAGE_SIGNATURE 0xDEADBEEF
@@ -41,20 +41,20 @@ struct TuyaDeviceState
 {
 
     // 1-4 Gang Switches
-    bool switch_1;
-    bool switch_2;
-    bool switch_3;
-    bool switch_4;
-    bool switch_BL;
-    bool child_lock;
+    bool relay1;
+    bool relay2;
+    bool relay3;
+    bool relay4;
+    bool backlightEnabled;
+    bool childLockEnabled;
     // Fan Specifics
-    bool fan_power;
-    uint8_t fan_speed;      // Usually 1-3 or 1-6
-    uint8_t restart_Status; // 0x00 - off, 0x01 - on, 0x02 - memory
+    bool fanRunning;
+    uint8_t fanSpeedLevel;      // Usually 1-3 or 1-6
+    uint8_t restartMode; // 0x00 - off, 0x01 - on, 0x02 - memory
 };
 
 // Create a global instance of the status
-TuyaDeviceState currentStatus = {false, false, false, false, false, false, false, 0, 0};
+TuyaDeviceState deviceState = {false, false, false, false, false, false, false, 0, 0};
 
 // Protocol fixed bytes
 enum TuyaProtocol
@@ -153,8 +153,8 @@ struct Config
 
 Config deviceSettings;
 
-const byte RESET_FRAME[] = {0x7B, 0x54, 0x02, 0x02, 0x04, 0x7D};
-const byte QUERY_FRAME[] = {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07};
+const byte resetFrame[] = {0x7B, 0x54, 0x02, 0x02, 0x04, 0x7D};
+const byte queryFrame[] = {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07};
 
 #define CURRENT_VERSION "1.0.2"
 #define OTA_MAGIC 0x55AA55AA

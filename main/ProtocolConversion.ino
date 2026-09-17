@@ -23,24 +23,24 @@ void AllNodeStatus(byte cmd){
     OEMBuffer[out++] = 11;            
 
     // --- NODE 1: FAN ---
-    OEMBuffer[out++] = currentStatus.fan_power ? 0x00 : 0xFF;
+    OEMBuffer[out++] = deviceState.fanRunning ? 0x00 : 0xFF;
     // Convert fan speed (assuming 1-5) to 0-100 range
-    OEMBuffer[out++] = (byte)(currentStatus.fan_speed * 25); 
+    OEMBuffer[out++] = (byte)(deviceState.fanSpeedLevel * 25); 
 
     // --- NODE 2: SWITCH 1 ---
-    OEMBuffer[out++] = currentStatus.switch_1 ? 0x00 : 0xFF;
+    OEMBuffer[out++] = deviceState.relay1 ? 0x00 : 0xFF;
     OEMBuffer[out++] = 0x00; // No Dimming for simple switch
 
     // --- NODE 3: SWITCH 2 ---
-    OEMBuffer[out++] = currentStatus.switch_2 ? 0x00 : 0xFF;
+    OEMBuffer[out++] = deviceState.relay2 ? 0x00 : 0xFF;
     OEMBuffer[out++] = 0x00;
 
     // --- NODE 4: SWITCH 3 ---
-    OEMBuffer[out++] = currentStatus.switch_3 ? 0x00 : 0xFF;
+    OEMBuffer[out++] = deviceState.relay3 ? 0x00 : 0xFF;
     OEMBuffer[out++] = 0x00;
 
     // --- NODE 5: SWITCH 4 ---
-    OEMBuffer[out++] = currentStatus.switch_4 ? 0x00 : 0xFF;
+    OEMBuffer[out++] = deviceState.relay4 ? 0x00 : 0xFF;
     OEMBuffer[out++] = 0x00;
 
     // 3. Calculate Checksum (Sum of all bytes before CS)
@@ -57,17 +57,17 @@ void AllNodeStatus(byte cmd){
     #endif
     
     // Check if data changed or heartbeat (30s) is needed
-    bool hasChanged = (out != lastLen || memcmp(OEMBuffer, lastFrame, out) != 0);
-    bool forceSend = (millis() - lastHeartbeat > 30000);
+    bool hasChanged = (out != lastFrameLength || memcmp(OEMBuffer, lastSentFrame, out) != 0);
+    bool forceSend = (millis() - lastHeartbeatMs > 30000);
 
     if (hasChanged || forceSend) {
         if (mqttClient.connected()) {
         mqttClient.publish(mqtt_pub_topic, OEMBuffer, out);
         
         // Update state trackers
-        memcpy(lastFrame, OEMBuffer, out);
-        lastLen = out;
-        lastHeartbeat = millis();
+        memcpy(lastSentFrame, OEMBuffer, out);
+        lastFrameLength = out;
+        lastHeartbeatMs = millis();
         
         #ifdef DEBUG
             Serial.println(F("[BRIDGE] Data sent to MQTT."));
@@ -100,7 +100,7 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
     if(cmd == TUYA_CMD_REPORT_STATUS ){
 
         bool changed = false ;
-        TuyaDeviceState oldState = currentStatus;
+        TuyaDeviceState oldState = deviceState;
         byte* dData = &tuyaData[idx];
         
         // Update our struct
@@ -109,35 +109,35 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
         switch(dpid){
 
             case DPID_SWITCH_1:
-                changed = (oldState.switch_1 != currentStatus.switch_1);
+                changed = (oldState.relay1 != deviceState.relay1);
                 break;
 
             case DPID_SWITCH_2:
-                changed = (oldState.switch_2 != currentStatus.switch_2);
+                changed = (oldState.relay2 != deviceState.relay2);
                 break;
 
             case DPID_SWITCH_3:
-                changed = (oldState.switch_3 != currentStatus.switch_3);
+                changed = (oldState.relay3 != deviceState.relay3);
                 break;
 
             case DPID_SWITCH_4:
-                changed = (oldState.switch_4 != currentStatus.switch_4);
+                changed = (oldState.relay4 != deviceState.relay4);
                 break;
 
             case DPID_FAN_1_SWITCH:
-                changed = (oldState.fan_power != currentStatus.fan_power);
+                changed = (oldState.fanRunning != deviceState.fanRunning);
                 break;
 
             case DPID_FAN_1_SPEED:
-                changed = (oldState.fan_speed != currentStatus.fan_speed);
+                changed = (oldState.fanSpeedLevel != deviceState.fanSpeedLevel);
                 break;
 
             case DPID_CHILD_LOCK:
-                changed = (oldState.child_lock != currentStatus.child_lock);
+                changed = (oldState.childLockEnabled != deviceState.childLockEnabled);
                 break;
             
             case DPID_BACKLIGHT:
-                changed = (oldState.child_lock != currentStatus.child_lock);
+                changed = (oldState.backlightEnabled != deviceState.backlightEnabled);
                 break;
         }
 
@@ -174,7 +174,7 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
                     OEMBuffer[out++] = tuyaData[idx] ? OEM_SWITCH_ON : OEM_SWITCH_OFF;   // ON
                     
                     
-                    if(dpid == DPID_FAN_1_SWITCH) OEMBuffer[out++] = (byte) (currentStatus.fan_speed * 25) ;
+                    if(dpid == DPID_FAN_1_SWITCH) OEMBuffer[out++] = (byte) (deviceState.fanSpeedLevel * 25) ;
                     else OEMBuffer[out++] = 0x00;
 
                     break;
@@ -295,7 +295,7 @@ void OemToTuya(String *OemData){
             // Fan Logic
             byte state = ( oem[idx++] == OEM_SWITCH_OFF ) ? TUYA_SWITCH_OFF : TUYA_SWITCH_ON;
             byte speed = oem[idx++] / (0x19) ;
-            if (speed >= 0 && currentStatus.fan_power && state == TUYA_SWITCH_ON) {
+            if (speed >= 0 && deviceState.fanRunning && state == TUYA_SWITCH_ON) {
                 idx++;
                 dpid = DPID_FAN_1_SPEED ; // Fan Speed
                 type = TUYA_DATA_TYPE_SPEED; // Value (4 bytes)

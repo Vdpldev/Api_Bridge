@@ -26,10 +26,10 @@ void setup()
 void maintainHeartbeat()
 {
 
-  if (millis() - lastHeartbeatTime >= 15000)
+  if (millis() - lastHeartbeatSentAt >= 15000)
   {
     FrameHeartbeat();
-    lastHeartbeatTime = millis();
+    lastHeartbeatSentAt = millis();
 
 #ifdef DEBUG
     Serial.println(F("[TUYA] Heartbeat Sent"));
@@ -41,11 +41,11 @@ void maintainHeartbeat()
 void reportWifiStatus()
 {
 
-  if (currentHeartBeatStatus != lastWifiStateReported)
+  if (currentHeartbeatStatus != lastWifiStatusReported)
   {
-    lastWifiStateReported = currentHeartBeatStatus;
+    lastWifiStatusReported = currentHeartbeatStatus;
 
-    byte f[8] = {0x55, 0xAA, 0x00, 0x03, 0x00, 0x01, currentHeartBeatStatus, 0x00};
+    byte f[8] = {0x55, 0xAA, 0x00, 0x03, 0x00, 0x01, currentHeartbeatStatus, 0x00};
 
     // Calculate Checksum
     byte cs = 0;
@@ -57,7 +57,7 @@ void reportWifiStatus()
 
 #ifdef DEBUG
     Serial.print(F("[TUYA] WiFi Status Updated: "));
-    Serial.println(currentStatus);
+    Serial.println(deviceState);
 #endif
   }
 }
@@ -73,7 +73,7 @@ void loop()
 
   reportWifiStatus(); // Reports WiFi/MQTT status changes
 
-  if (!msgQueue.empty() && (millis() - lastSerialSend > 100))
+  if (!msgQueue.empty() && (millis() - lastSerialSendAt > 100))
   {
     
     String nextMsg = msgQueue.front();
@@ -86,7 +86,7 @@ void loop()
       OemToTuya(&nextMsg);
       msgQueue.pop_front();
       Serial.print(nextMsg);
-      lastSerialSend = millis();
+      lastSerialSendAt = millis();
     }
   }
 }

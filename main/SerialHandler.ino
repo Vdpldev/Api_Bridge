@@ -31,35 +31,35 @@ void updateDeviceState(byte dpid, byte type, byte* data, int len) {
     
     switch (dpid) {
         case DPID_SWITCH_1: // Switch 1
-            currentStatus.switch_1 = (data[0] == 0x01);
+            deviceState.relay1 = (data[0] == 0x01);
             break;
         case DPID_SWITCH_2: // Switch 2
-            currentStatus.switch_2 = (data[0] == 0x01);
+            deviceState.relay2 = (data[0] == 0x01);
             break;
         case DPID_SWITCH_3: // Switch 2
-            currentStatus.switch_3 = (data[0] == 0x01);
+            deviceState.relay3 = (data[0] == 0x01);
             break;
         case DPID_SWITCH_4: // Switch 2
-            currentStatus.switch_4 = (data[0] == 0x01);
+            deviceState.relay4 = (data[0] == 0x01);
             break;
         case DPID_FAN_1_SWITCH: // Fan Power (DPID 102)
-            currentStatus.fan_power = (data[0] == 0x01);
+            deviceState.fanRunning = (data[0] == 0x01);
             break;
         case DPID_FAN_1_SPEED: // Fan Speed (DPID 104)
             // Tuya 'Value' types are 4 bytes long (Big Endian)
-            currentStatus.fan_speed = (uint8_t)data[len-1];
+            deviceState.fanSpeedLevel = (uint8_t)data[len-1];
             break;
         
         case DPID_BACKLIGHT: // Switch backlight
-            currentStatus.switch_BL = (data[0] == 0x01); 
+            deviceState.backlightEnabled = (data[0] == 0x01); 
             break;
           
         case DPID_CHILD_LOCK: // Child Lock
-            currentStatus.child_lock = (data[0] == 0x01) ; 
+            deviceState.childLockEnabled = (data[0] == 0x01) ; 
             break;
           
         case 0x0E: // RESTART STATUS
-            currentStatus.restart_Status =  (uint8_t)data[len-1]; 
+            deviceState.restartMode =  (uint8_t)data[len-1]; 
             break;
         
         ;
@@ -73,15 +73,15 @@ void printCurrentStatus(const char* trigger) {
     Serial.print(trigger);
     Serial.print(F("] -> "));
     
-    Serial.print(F("SW1:")); Serial.print(currentStatus.switch_1 ? "ON " : "OFF ");
-    Serial.print(F("SW2:")); Serial.print(currentStatus.switch_2 ? "ON " : "OFF ");
-    Serial.print(F("SW3:")); Serial.print(currentStatus.switch_3 ? "ON " : "OFF ");
-    Serial.print(F("SW4:")); Serial.print(currentStatus.switch_4 ? "ON " : "OFF ");
-    Serial.print(F("| BackLight:")); Serial.print(currentStatus.switch_BL ? "ON " : "OFF ");
-    Serial.print(F("| Child_lock:")); Serial.print(currentStatus.child_lock ? "ON " : "OFF ");
-    Serial.print(F("| FAN:")); Serial.print(currentStatus.fan_power ? "ON " : "OFF ");
-    Serial.print(F("| SPEED:")); Serial.print(currentStatus.fan_speed);
-    Serial.print(F("| Restart Status:")); Serial.print(currentStatus.restart_Status);
+    Serial.print(F("SW1:")); Serial.print(deviceState.relay1 ? "ON " : "OFF ");
+    Serial.print(F("SW2:")); Serial.print(deviceState.relay2 ? "ON " : "OFF ");
+    Serial.print(F("SW3:")); Serial.print(deviceState.relay3 ? "ON " : "OFF ");
+    Serial.print(F("SW4:")); Serial.print(deviceState.relay4 ? "ON " : "OFF ");
+    Serial.print(F("| BackLight:")); Serial.print(deviceState.backlightEnabled ? "ON " : "OFF ");
+    Serial.print(F("| Child_lock:")); Serial.print(deviceState.childLockEnabled ? "ON " : "OFF ");
+    Serial.print(F("| FAN:")); Serial.print(deviceState.fanRunning ? "ON " : "OFF ");
+    Serial.print(F("| SPEED:")); Serial.print(deviceState.fanSpeedLevel);
+    Serial.print(F("| Restart Status:")); Serial.print(deviceState.restartMode);
     
     Serial.println();
 }
@@ -152,8 +152,8 @@ void processSerialInput() {
           #endif
           
           // Check if data changed or heartbeat (30s) is needed
-          // bool hasChanged = (bufferIndex != lastLen || memcmp(oemFrame, lastFrame, oemLen) != 0);
-          // bool forceSend = (millis() - lastHeartbeat > 30000);
+          // bool hasChanged = (bufferIndex != lastFrameLength || memcmp(oemFrame, lastSentFrame, oemLen) != 0);
+          // bool forceSend = (millis() - lastHeartbeatMs > 30000);
 
           // if (hasChanged || forceSend) {
             if (mqttClient.connected() ) {
@@ -161,9 +161,9 @@ void processSerialInput() {
               mqttClient.publish(mqtt_pub_topic, oemFrame, oemLen);
 
               // Update state trackers
-              memcpy(lastFrame, oemFrame, oemLen);
-              lastLen = oemLen;
-              lastHeartbeat = millis();
+              memcpy(lastSentFrame, oemFrame, oemLen);
+              lastFrameLength = oemLen;
+              lastHeartbeatMs = millis();
               
               #ifdef DEBUG
                 Serial.println(F("[BRIDGE] Data sent to MQTT."));

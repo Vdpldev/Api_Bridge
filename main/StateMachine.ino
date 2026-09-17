@@ -6,7 +6,7 @@ void runStateMachine()
   switch (currentState) 
   {
     case ST_INIT:
-      currentHeartBeatStatus = 0x00;
+      currentHeartbeatStatus = 0x00;
       #ifdef DEBUG
         Serial.println("[STATE] Initializing Hardware...");
       #endif
@@ -19,13 +19,13 @@ void runStateMachine()
     break;
 
     case ST_LOAD_CONFIG:
-      currentHeartBeatStatus = 0x00;
+      currentHeartbeatStatus = 0x00;
       if (loadCredentials()) currentState = ST_WIFI_CONNECT;
       else currentState = ST_AP_MODE;
     break;
 
     case ST_AP_MODE:
-      currentHeartBeatStatus = 0x01;
+      currentHeartbeatStatus = 0x01;
       if (!apStarted) 
       {
         startAPMode();
@@ -33,17 +33,16 @@ void runStateMachine()
       }
       handleTcpConfig();
       
-      if (!All_Status) { 
-        const byte queryStatusFrame[] =  {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07}; 
-        sendFrame(queryStatusFrame,sizeof(queryStatusFrame),"All Node Status"); 
-        All_Status=true;
+      if (!allNodesStatusReceived) { 
+        sendFrame(queryFrame,sizeof(queryFrame),"All Node Status"); 
+        allNodesStatusReceived=true;
       }
       
       processSerialInput();
     break;
 
     case ST_WIFI_CONNECT:
-      currentHeartBeatStatus = 0x02;
+      currentHeartbeatStatus = 0x02;
       digitalWrite(STATUS_LED, LOW);
       startWifiStation(deviceSettings.ssid, deviceSettings.password);
       stateTimer = millis();
@@ -57,7 +56,7 @@ void runStateMachine()
       {       
         digitalWrite(STATUS_LED, HIGH);
         currentState = ST_MQTT_CONNECT;
-        currentHeartBeatStatus = 0x03;
+        currentHeartbeatStatus = 0x03;
         configTime(19800, 0, "pool.ntp.org", "time.nist.gov"); // IST (+5:30)
         
       } 
@@ -71,7 +70,7 @@ void runStateMachine()
       if (attemptMqttConnect())
       {
         
-        currentHeartBeatStatus = 0x04;
+        currentHeartbeatStatus = 0x04;
         currentState = ST_OPERATIONAL;
       } 
       else 
@@ -83,10 +82,9 @@ void runStateMachine()
   
     case ST_OPERATIONAL:
       
-      if (!All_Status) { 
-        const byte queryStatusFrame[] =  {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07}; 
-        sendFrame(queryStatusFrame,sizeof(queryStatusFrame),"All Node Status"); 
-        All_Status=true;
+      if (!allNodesStatusReceived) { 
+        sendFrame(queryFrame,sizeof(queryFrame),"All Node Status"); 
+        allNodesStatusReceived=true;
       }
       digitalWrite(STATUS_LED, HIGH);
       
@@ -103,7 +101,7 @@ void runStateMachine()
 
       if (!mqttClient.connected()) 
       {
-        currentHeartBeatStatus = 0x03;
+        currentHeartbeatStatus = 0x03;
         currentState = ST_MQTT_CONNECT;
       }
     break;
