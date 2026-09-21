@@ -57,11 +57,8 @@ void AllNodeStatus(byte cmd){
     #endif
     
     // Check if data changed or heartbeat (30s) is needed
-    bool hasChanged = (out != lastFrameLength || memcmp(OEMBuffer, lastSentFrame, out) != 0);
-    bool forceSend = (millis() - lastHeartbeatMs > 30000);
-
-    if (hasChanged || forceSend) {
-        if (mqttClient.connected()) {
+    
+    if (mqttClient.connected()) {
         mqttClient.publish(mqtt_pub_topic, OEMBuffer, out);
         
         // Update state trackers
@@ -72,8 +69,8 @@ void AllNodeStatus(byte cmd){
         #ifdef DEBUG
             Serial.println(F("[BRIDGE] Data sent to MQTT."));
         #endif
-        }
     }
+    
 }
 
 byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){

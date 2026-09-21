@@ -1,5 +1,6 @@
 #include "constant.h"
 
+
 // #define DEBUG
 void pushToMsgQueue(const byte *frame, size_t len)
 {
@@ -16,6 +17,7 @@ void setup()
 {
 
   Serial.begin(DEBUG_BAUD);
+  stateTimer  = millis();
 
 #ifdef DEBUG
   Serial.println("--- SYSTEM BOOTING ---");
@@ -71,7 +73,8 @@ void loop()
 
   maintainHeartbeat(); // Handles 5s timer for Heartbeat
 
-  reportWifiStatus(); // Reports WiFi/MQTT status changes
+  if(millis() - stateTimer > 4000)
+      reportWifiStatus(); // Reports WiFi/MQTT status changes
 
   if (!msgQueue.empty() && (millis() - lastSerialSendAt > 100))
   {

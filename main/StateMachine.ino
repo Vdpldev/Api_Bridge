@@ -1,4 +1,4 @@
-unsigned long stateTimer = 0;
+
 static bool apStarted = false;
 
 void runStateMachine() 
