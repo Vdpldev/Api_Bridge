@@ -212,8 +212,10 @@ byte* TuyaToOem(byte ver ,byte cmd , byte *tuyaData, int tuyaLen,int *oemLen){
             int pEnd = payload.indexOf("\"", pStart + 5);
             pid = payload.substring(pStart + 5, pEnd);
         }
-        Serial.print(pid);
-
+        #ifdef DEGUB
+            Serial.print(pid);
+        #endif
+        
         int vIdx = payload.indexOf("\"v\":\"");
         if (vIdx != -1) {
             verMajor = payload.charAt(vIdx + 5) - '0'; // Extracts '2' from "2.1.17"

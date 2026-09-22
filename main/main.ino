@@ -19,9 +19,9 @@ void setup()
   Serial.begin(DEBUG_BAUD);
   stateTimer  = millis();
 
-#ifdef DEBUG
-  Serial.println("--- SYSTEM BOOTING ---");
-#endif
+  #ifdef DEBUG
+    Serial.println("--- SYSTEM BOOTING ---");
+  #endif
 }
 
 // Function to send Heartbeat (Command 0x00)
@@ -33,9 +33,9 @@ void maintainHeartbeat()
     FrameHeartbeat();
     lastHeartbeatSentAt = millis();
 
-#ifdef DEBUG
-    Serial.println(F("[TUYA] Heartbeat Sent"));
-#endif
+  #ifdef DEBUG
+      Serial.println(F("[TUYA] Heartbeat Sent"));
+  #endif
   }
 }
 
@@ -57,10 +57,10 @@ void reportWifiStatus()
 
     sendFrame(f, sizeof(f), "HWifi Status");
 
-#ifdef DEBUG
-    Serial.print(F("[TUYA] WiFi Status Updated: "));
-    Serial.println(deviceState);
-#endif
+    #ifdef DEBUG
+        Serial.print(F("[TUYA] WiFi Status Updated: "));
+        Serial.println(deviceState);
+    #endif
   }
 }
 

@@ -120,7 +120,7 @@ void runStateMachine()
 
     case ST_OTA_PERFORM:{
 
-      bool ok = performUpdate(getValue(txt, "md5"));
+      bool ok = performUpdate();
       
       if (!ok)
       {

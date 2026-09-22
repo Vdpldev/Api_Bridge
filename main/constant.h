@@ -156,10 +156,10 @@ Config deviceSettings;
 const byte resetFrame[] = {0x7B, 0x54, 0x02, 0x02, 0x04, 0x7D};
 const byte queryFrame[] = {0x55, 0xAA, 0x00, 0x08, 0x00, 0x00, 0x07};
 
-#define CURRENT_VERSION "1.4.2"
+#define CURRENT_VERSION "1.4.1"
 #define OTA_MAGIC 0x55AA55AA
 
-//#define OTA_URL "https://back.iotstudio.org/update_fw"
+#define OTA_URL "https://back.iotstudio.org/update_fw"
 
 const char* VERSION_URL =
 "https://drive.google.com/uc?export=download&id=1kgM-aPM1m7cmDA-OR2QhUG_2Dx1Ko56C";
@@ -179,7 +179,7 @@ struct OTAState
 
   char version[16];
 };
-String txt;
+String md5;
 OTAState otaState;
 unsigned long healthCheckStart = 0;
 
