@@ -226,8 +226,7 @@ bool checkForUpdates(){
       return false;
   }
 
-  
-
+  bool update_available = doc["firmware_id"].as<bool>();
   firmware_id = doc["firmware_id"].as<String>();
   expectedChecksum  = doc["checksum"].as<String>();
   String latestVersion = doc["version"].as<String>();
@@ -267,12 +266,12 @@ bool checkForUpdates(){
   //    Serial.println("]");
   // #endif
 
-  if (latestVersion == CURRENT_VERSION)
+  if (!update_available)
   {
-    #ifdef DEBUG
+    //#ifdef DEBUG
     Serial.println("Firmware Up To Date");
-    #endif
-    return false;
+    //#endif
+    return update_available;
   }
 
   Serial.println("Update Available");
@@ -283,80 +282,126 @@ bool checkForUpdates(){
 
   // saveState();
 
-  return true;
+  return update_available;
 
 }
 
 bool performUpdate() {
 
-  WiFiClientSecure client;
+  WiFiClientSecure httpsClient;
   sendUpdateStatus("downloading", firmware_id, "none");
   delay(100);
   
   String firmwareURL = String(OTA_URL) + "/api/firmware/" + firmware_id + "/download";
 
   digitalWrite(LED_BUILTIN, LOW); 
-  client.setInsecure();
+  httpsClient.setInsecure();
+  HTTPClient https;
 
-  #ifdef DEBUG  
-    Serial.println("[OTA] Starting Download...");
-  #endif
-  #ifdef DEBUG  
-    Serial.printf(
-      "[OTA] Heap Before OTA: %u\n",
-      ESP.getFreeHeap());
-  #endif
-
-  ESPhttpUpdate.onProgress(updateProgress);
-  ESPhttpUpdate.setMD5sum(md5.c_str());
   
-  ESPhttpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  t_httpUpdate_return ret = ESPhttpUpdate.update(client, firmwareURL , CURRENT_VERSION);
 
-  delay(500);
-  yield();
-
-  #ifdef DEBUG  
-
-    Serial.printf(
-      "[OTA] Heap After OTA: %u\n",
-      ESP.getFreeHeap());
-    Serial.printf(
-      "[OTA] Error Code: %d\n",
-      ESPhttpUpdate.getLastError());
-
-    Serial.printf(
-      "[OTA] Error String: %s\n",
-      ESPhttpUpdate.getLastErrorString().c_str());
-
-  #endif
-
-  switch (ret) 
-  {
-    case HTTP_UPDATE_FAILED:
-        sendUpdateStatus("failed", firmware_id, "none");
-      //#ifdef DEBUG
-        Serial.printf("[OTA] Update failed. Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-      //#endif
-      return false;
-    break;
-
-    case HTTP_UPDATE_NO_UPDATES:
-      //#ifdef DEBUG    
-        Serial.println("[OTA] No updates available.");
-      //#endif 
-      return false;     
-    break;
-    
-    case HTTP_UPDATE_OK:
-        sendUpdateStatus("success", firmware_id, "none");
-      //#ifdef DEBUG    
-        Serial.println("[OTA] Update successful! Rebooting...");
-      //#endif
-      return true;
-    break;
+  if (!https.begin(httpsClient, firmwareURL)) {
+    Serial.println("❌ HTTPS begin failed");
+    sendUpdateStatus("failed", firmware_id, "HTTPS begin failed");
+    delay(100);
+    return false;
   }
-  return false;
+
+  int httpCode = https.GET();
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("❌ HTTP GET failed, code: %d\n", httpCode);
+    sendUpdateStatus("failed", firmware_id, "HTTP GET failed: " + String(httpCode));
+    delay(100);
+    https.end();
+    return false;
+  }
+
+  int totalLength = https.getSize();
+  if (totalLength <= 0) {
+    Serial.println("❌ Invalid firmware size");
+    sendUpdateStatus("failed", firmware_id, "Invalid firmware size");
+    delay(100);
+    https.end();
+    return false;
+  }
+
+   //   DEBUG.printf("Firmware size: %d bytes\n", totalLength);
+
+  if (!Update.begin(totalLength)) {
+    Serial.println("❌ Not enough space for OTA");
+    sendUpdateStatus("failed", firmware_id, "Not enough space for OTA");
+    delay(100);
+    https.end();
+    return false;
+  }
+
+  // SHA256 init
+  br_sha256_context ctx;
+  br_sha256_init(&ctx);
+
+  WiFiClient* stream = https.getStreamPtr();
+  uint8_t buff[512];
+  int written = 0;
+  int lastReportedPercent = 0;
+
+  while (https.connected() && written < totalLength) {
+    size_t sizeAvailable = stream->available();
+    if (sizeAvailable) {
+      int bytesRead = stream->readBytes(buff, (sizeAvailable > sizeof(buff)) ? sizeof(buff) : sizeAvailable);
+      br_sha256_update(&ctx, buff, bytesRead);
+      Update.write(buff, bytesRead);
+      written += bytesRead;
+
+      int percent = (written * 100) / totalLength;
+      if (percent - lastReportedPercent >= 10 || percent == 100) {
+        lastReportedPercent = percent;
+        String msg = "Downloaded " + String(written) + " of " + String(totalLength) + " bytes (" + String(percent) + "%)";
+        Serial.println(msg);
+        // sendUpdateStatus("downloading", firmware_id, msg);
+        delay(100);
+      }
+    }
+    delay(1);
+  }
+
+  
+
+  // Finalize SHA256
+  uint8_t hash[32];
+  br_sha256_out(&ctx, hash);
+
+  String calculatedChecksum = "";
+  for (int i = 0; i < 32; i++) {
+    if (hash[i] < 0x10) calculatedChecksum += "0";
+    calculatedChecksum += String(hash[i], HEX);
+  }
+  calculatedChecksum.toLowerCase();
+
+  Serial.println("Expected checksum:   " + expectedChecksum);
+  Serial.println("Calculated checksum: " + calculatedChecksum);
+
+  if (expectedChecksum != calculatedChecksum) {
+    Serial.println("❌ Checksum mismatch! Aborting update.");
+    sendUpdateStatus("failed", firmware_id, "Checksum mismatch");
+    delay(100);
+    Update.end(); // do not commit
+    return false;
+  }
+
+  if (!Update.end()) {
+    Serial.printf("❌ OTA update error: %s\n", Update.getErrorString());
+    sendUpdateStatus("failed", firmware_id, Update.getErrorString());
+    delay(100);
+    return false;
+  }
+
+  Serial.println("✅ OTA update successful. Rebooting...");
+     sendUpdateStatus("success", firmware_id, "Update completed successfully");
+  delay(100);
+  https.end();
+  ESP.restart();
+  return true;
+
 }
 
 void rollbackFirmware(){

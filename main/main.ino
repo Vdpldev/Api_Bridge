@@ -2,8 +2,7 @@
 
 
 // #define DEBUG
-void pushToMsgQueue(const byte *frame, size_t len)
-{
+void pushToMsgQueue(const byte *frame, size_t len){
   String msgStr = "";
   msgStr.reserve(len);
   for (size_t i = 0; i < len; i++)
@@ -13,12 +12,10 @@ void pushToMsgQueue(const byte *frame, size_t len)
   msgQueue.push_back(msgStr);
 }
 
-void setup()
-{
+void setup(){
 
   Serial.begin(DEBUG_BAUD);
   stateTimer  = millis();
-
   #ifdef DEBUG
     Serial.println("--- SYSTEM BOOTING ---");
   #endif
@@ -40,8 +37,7 @@ void maintainHeartbeat()
 }
 
 // Function to report WiFi Status to MCU (Command 0x03)
-void reportWifiStatus()
-{
+void reportWifiStatus(){
 
   if (currentHeartbeatStatus != lastWifiStatusReported)
   {
@@ -65,8 +61,7 @@ void reportWifiStatus()
 }
 
 // The updated Loop
-void loop()
-{
+void loop(){
   
 
   runStateMachine(); // Your existing State Machine logic
