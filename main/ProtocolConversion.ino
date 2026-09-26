@@ -280,6 +280,7 @@ void OemToTuya(String *OemData){
 
     byte cmd = oem[idx++] ;
     idx++;
+    
     if(cmd == OEM_CMD_UPDATE){
         tuyaFrame[i++] = TUYA_CMD_SEND_COMMAND; // Command: Send
         tuyaFrame[i++] = TUYA_LENGTH_HIGH; // Length High
@@ -397,6 +398,29 @@ void OemToTuya(String *OemData){
         tuyaFrame[i++] = 0X01;
         tuyaFrame[i++] = (oem[idx+1] == 0xFF) ? 0x00 : 0x01 ;
         
+    }
+    else if(cmd == OEM_CMD_RESTART_STATUS){
+        tuyaFrame[i++] = TUYA_CMD_SEND_COMMAND; // Command: Send
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH; // Length High
+        tuyaFrame[i++] = 0x05;
+        tuyaFrame[i++] = DPID_RESTART_STATUS;
+        tuyaFrame[i++] = 0x04;
+        tuyaFrame[i++] = TUYA_LENGTH_HIGH;
+        tuyaFrame[i++] = 0X01;
+        
+        switch(oem[idx]){
+            case 0x00:                     // POWER OFF
+                tuyaFrame[i++] = 0x00;
+                break;
+            case 0x01:                     // MEMORY
+                tuyaFrame[i++] = 0x02;
+                break;
+            case 0x02:                     // POWER ON
+                tuyaFrame[i++] = 0x01;
+                break;
+            
+        }
+
     }
     else{
         *OemData = "";

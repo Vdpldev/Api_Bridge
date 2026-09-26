@@ -95,7 +95,8 @@ enum TuyaDPID
     DPID_BACKLIGHT         = 0X10,
     DPID_CHILD_LOCK        = 0x65,
     DPID_FAN_1_SWITCH      = 0x66, // 102: Fan On/Off
-    DPID_FAN_1_SPEED       = 0x68   // 104: Fan Speed (1-3 or 1-6)
+    DPID_FAN_1_SPEED       = 0x68,   // 104: Fan Speed (1-3 or 1-6)
+    DPID_RESTART_STATUS    = 0x0E
 };
 // Frame Markers
 enum OemProtocol
@@ -120,7 +121,8 @@ enum OemCommand
     OEM_RSP_CHILD_LOCK = 0x50,
     OEM_CMD_CHILD_LOCK = 0x0B,
     OEM_RSP_BACKLIGHT = 0x59,
-    OEM_CMD_BACKLIGHT = 0x09
+    OEM_CMD_BACKLIGHT = 0x09,
+    OEM_CMD_RESTART_STATUS = 0x14
 };
 enum OemSTATUS
 {
